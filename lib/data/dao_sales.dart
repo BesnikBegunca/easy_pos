@@ -1,4 +1,3 @@
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'db.dart';
 
 enum RangeKind { day, week, month, year }
@@ -41,7 +40,8 @@ class SalesDao {
     final db = await AppDb.I.db;
     final r = _range(range, anchor);
 
-    final rows = await db.rawQuery('''
+    final rows = await db.rawQuery(
+      '''
 SELECT 
   u.id AS waiter_id,
   u.full_name AS full_name,
@@ -55,7 +55,9 @@ LEFT JOIN sales s
 WHERE u.role = 'waiter' AND u.is_active=1
 GROUP BY u.id
 ORDER BY total_cents DESC, u.username ASC;
-''', [r.$1, r.$2]);
+''',
+      [r.$1, r.$2],
+    );
 
     return rows.map((e) {
       return WaiterTotalRow(

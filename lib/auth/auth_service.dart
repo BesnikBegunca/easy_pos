@@ -9,7 +9,12 @@ class AuthUser {
   final UserRole role;
   final String? fullName;
 
-  AuthUser({required this.id, required this.username, required this.role, this.fullName});
+  AuthUser({
+    required this.id,
+    required this.username,
+    required this.role,
+    this.fullName,
+  });
 }
 
 class AuthService {
@@ -23,7 +28,11 @@ class AuthService {
 
   Future<void> ensureSeed() async {
     final db = await AppDb.I.db;
-    final res = await db.query('users', where: 'username=?', whereArgs: ['admin']);
+    final res = await db.query(
+      'users',
+      where: 'username=?',
+      whereArgs: ['admin'],
+    );
     if (res.isNotEmpty) return;
 
     await db.insert('users', {
@@ -36,22 +45,57 @@ class AuthService {
     });
   }
 
-  Future<AuthUser?> login(String username, String password) async {
-    final db = await AppDb.I.db;
-    final rows = await db.query('users', where: 'username=? AND is_active=1', whereArgs: [username], limit: 1);
-    if (rows.isEmpty) return null;
+  Future<AuthUser?> login(String password) async {
+    // Predefined passwords
+    const adminPasswords = ['1234'];
+    const waiterPasswords = ['1111'];
 
-    final u = rows.first;
-    final passHash = u['pass_hash'] as String;
-    if (passHash != _hash(password)) return null;
+    UserRole? role;
+    String username;
+    String? fullName;
+
+    if (adminPasswords.contains(password)) {
+      role = UserRole.admin;
+      username = 'admin';
+      fullName = 'Administrator';
+    } else if (waiterPasswords.contains(password)) {
+      role = UserRole.waiter;
+      username = 'waiter_${waiterPasswords.indexOf(password) + 1}';
+      fullName = 'Waiter ${waiterPasswords.indexOf(password) + 1}';
+    } else {
+      return null; // Invalid password
+    }
+
+    // Check if user exists in DB, if not create
+    final db = await AppDb.I.db;
+    final rows = await db.query(
+      'users',
+      where: 'username=?',
+      whereArgs: [username],
+      limit: 1,
+    );
+    int userId;
+    if (rows.isEmpty) {
+      userId = await db.insert('users', {
+        'username': username,
+        'pass_hash': _hash(password),
+        'role': roleToString(role),
+        'full_name': fullName,
+        'is_active': 1,
+        'created_at': DateTime.now().millisecondsSinceEpoch,
+      });
+    } else {
+      userId = rows.first['id'] as int;
+    }
 
     return AuthUser(
-      id: u['id'] as int,
-      username: u['username'] as String,
-      role: roleFromString(u['role'] as String),
-      fullName: u['full_name'] as String?,
+      id: userId,
+      username: username,
+      role: role,
+      fullName: fullName,
     );
   }
+
   // ✅ përdoret nga Users CRUD
   String hashPassword(String plain) => _hash(plain);
 
@@ -64,5 +108,4 @@ class AuthService {
       whereArgs: [userId],
     );
   }
-
 }

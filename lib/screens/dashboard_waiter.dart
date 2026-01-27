@@ -18,7 +18,11 @@ class _DashboardWaiterState extends State<DashboardWaiter> {
   Future<void> _load() async {
     setState(() => loading = true);
     final u = Session.I.current!;
-    final sum = await SalesDao.I.sumTotalCents(range: range, anchor: DateTime.now(), waiterId: u.id);
+    final sum = await SalesDao.I.sumTotalCents(
+      range: range,
+      anchor: DateTime.now(),
+      waiterId: u.id,
+    );
     if (!mounted) return;
     setState(() {
       totalCents = sum;
@@ -40,7 +44,10 @@ class _DashboardWaiterState extends State<DashboardWaiter> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Mirësevjen, ${u.fullName ?? u.username}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+          Text(
+            'Mirësevjen, ${u.fullName ?? u.username}',
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 12),
 
           Row(
@@ -70,11 +77,17 @@ class _DashboardWaiterState extends State<DashboardWaiter> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Totali yt (${_rangeLabel(range)})', style: const TextStyle(fontWeight: FontWeight.w600)),
+                        Text(
+                          'Totali yt (${_rangeLabel(range)})',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
                         const SizedBox(height: 6),
                         Text(
                           loading ? '...' : moneyFromCents(totalCents),
-                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                         const SizedBox(height: 6),
                         const Text('Këtu shihen vetëm shitjet e tua.'),
@@ -95,10 +108,10 @@ class _DashboardWaiterState extends State<DashboardWaiter> {
               onPressed: loading
                   ? null
                   : () async {
-                // test: shto 5.00€
-                await SalesDao.I.addSale(waiterId: u.id, totalCents: 500);
-                _load();
-              },
+                      // test: shto 5.00€
+                      await SalesDao.I.addSale(waiterId: u.id, totalCents: 500);
+                      _load();
+                    },
               icon: const Icon(Icons.add),
               label: const Text('TEST: Shto 5.00€ (hiqe ma vonë)'),
             ),

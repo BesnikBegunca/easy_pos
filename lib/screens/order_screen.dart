@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../data/dao_orders.dart';
 import '../data/dao_products.dart';
 import '../util/money.dart';
+import '../theme/app_theme.dart';
+import '../theme/app_widgets.dart';
 
 class OrderScreen extends StatefulWidget {
   final int tableId;
@@ -82,20 +84,70 @@ class _OrderScreenState extends State<OrderScreen> {
 
   Future<void> _checkout() async {
     if (totalCents <= 0) return;
-    final ok = await showDialog<bool>(
+
+    // Show payment method selection with items summary
+    final paymentMethod = await showDialog<String>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Checkout'),
-        content: Text('Me e mbyll porosinë për ${widget.tableName}?\nTotali: ${moneyFromCents(totalCents)}'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Anulo')),
-          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Paguaj')),
-        ],
+      builder: (_) => AppCard(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Checkout ${widget.tableName}', style: AppTheme.titleMedium),
+            const SizedBox(height: AppTheme.spaceL),
+            const Text('Items:', style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: AppTheme.spaceS),
+            SizedBox(
+              height: 120,
+              child: ListView(
+                children: [
+                  for (final l in lines)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Row(
+                        children: [
+                          Expanded(child: Text('${l.qty}x ${l.name}')),
+                          Text(moneyFromCents(l.lineTotalCents)),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const Divider(),
+            Text(
+              'Total: ${moneyFromCents(totalCents)}',
+              style: AppTheme.bodyLarge,
+            ),
+            const SizedBox(height: AppTheme.spaceL),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                AppPrimaryButton(
+                  label: 'Cash',
+                  onPressed: () => Navigator.pop(context, 'cash'),
+                ),
+                AppPrimaryButton(
+                  label: 'Card',
+                  onPressed: () => Navigator.pop(context, 'card'),
+                ),
+                AppPrimaryButton(
+                  label: 'Mixed',
+                  onPressed: () => Navigator.pop(context, 'mixed'),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
-    if (ok != true) return;
 
-    await OrdersDao.I.checkout(orderId: orderId);
+    if (paymentMethod == null) return;
+
+    await OrdersDao.I.checkout(
+      orderId: orderId,
+      paymentMethod: paymentMethod,
+      paidBy: widget.waiterId,
+    );
     if (!mounted) return;
     Navigator.of(context).pop();
   }
@@ -103,22 +155,21 @@ class _OrderScreenState extends State<OrderScreen> {
   @override
   Widget build(BuildContext context) {
     if (loading) {
-      return Scaffold(
-        appBar: AppBar(title: Text(widget.tableName)),
+      return AppScaffold(
+        topBar: AppTopBar(title: widget.tableName),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Porosia — ${widget.tableName}'),
+    return AppScaffold(
+      topBar: AppTopBar(
+        title: widget.tableName,
         actions: [
-          TextButton.icon(
-            onPressed: totalCents <= 0 ? null : _checkout,
-            icon: const Icon(Icons.payments),
-            label: Text('Checkout (${moneyFromCents(totalCents)})'),
+          TopChip(
+            icon: Icons.payments,
+            label: 'PAGUAJ (${moneyFromCents(totalCents)})',
+            onTap: totalCents <= 0 ? () {} : () => _checkout(),
           ),
-          const SizedBox(width: 10),
         ],
       ),
       body: Row(
@@ -127,7 +178,9 @@ class _OrderScreenState extends State<OrderScreen> {
           Container(
             width: 240,
             decoration: BoxDecoration(
-              border: Border(right: BorderSide(color: Colors.grey.withOpacity(0.2))),
+              border: Border(
+                right: BorderSide(color: Colors.grey.withOpacity(0.2)),
+              ),
             ),
             child: Column(
               children: [
@@ -136,7 +189,10 @@ class _OrderScreenState extends State<OrderScreen> {
                   padding: EdgeInsets.symmetric(horizontal: 12),
                   child: Align(
                     alignment: Alignment.centerLeft,
-                    child: Text('Kategoritë', style: TextStyle(fontWeight: FontWeight.w900)),
+                    child: Text(
+                      'Kategoritë',
+                      style: TextStyle(fontWeight: FontWeight.w900),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -194,45 +250,58 @@ class _OrderScreenState extends State<OrderScreen> {
 
                   Expanded(
                     child: products.isEmpty
-                        ? const Center(child: Text('S’ka produkte në këtë kategori.'))
-                        : GridView.count(
-                      crossAxisCount: 4,
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 10,
-                      children: [
-                        for (final p in products)
-                          InkWell(
-                            onTap: () async {
-                              await OrdersDao.I.addProductToOrder(
-                                orderId: orderId,
-                                productId: p.id,
-                                unitPriceCents: p.priceCents,
-                              );
-                              await _refreshCart();
-                            },
-                            child: Card(
-                              child: Padding(
-                                padding: const EdgeInsets.all(12),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Icon(Icons.local_cafe, size: 22),
-                                    const Spacer(),
-                                    Text(
-                                      p.name,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontWeight: FontWeight.w900),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(moneyFromCents(p.priceCents), style: const TextStyle(fontSize: 12)),
-                                  ],
-                                ),
-                              ),
-                            ),
+                        ? const Center(
+                            child: Text('S’ka produkte në këtë kategori.'),
                           )
-                      ],
-                    ),
+                        : GridView.count(
+                            crossAxisCount: 4,
+                            crossAxisSpacing: 10,
+                            mainAxisSpacing: 10,
+                            children: [
+                              for (final p in products)
+                                InkWell(
+                                  onTap: () async {
+                                    await OrdersDao.I.addProductToOrder(
+                                      orderId: orderId,
+                                      productId: p.id,
+                                      unitPriceCents: p.priceCents,
+                                    );
+                                    await _refreshCart();
+                                  },
+                                  child: Card(
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(12),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          const Icon(
+                                            Icons.local_cafe,
+                                            size: 22,
+                                          ),
+                                          const Spacer(),
+                                          Text(
+                                            p.name,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Text(
+                                            moneyFromCents(p.priceCents),
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
                   ),
                 ],
               ),
@@ -250,51 +319,69 @@ class _OrderScreenState extends State<OrderScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Shporta', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+                      const Text(
+                        'Shporta',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
                       const SizedBox(height: 10),
 
                       Expanded(
                         child: lines.isEmpty
                             ? const Center(child: Text('Shto produkte…'))
                             : ListView.separated(
-                          itemCount: lines.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1),
-                          itemBuilder: (_, i) {
-                            final l = lines[i];
-                            return ListTile(
-                              title: Text(l.name),
-                              subtitle: Text('${moneyFromCents(l.unitPriceCents)} x ${l.qty}'),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    onPressed: () async {
-                                      await OrdersDao.I.changeQty(
-                                        itemId: l.itemId,
-                                        orderId: orderId,
-                                        newQty: l.qty - 1,
-                                      );
-                                      await _refreshCart();
-                                    },
-                                    icon: const Icon(Icons.remove_circle_outline),
-                                  ),
-                                  Text('${l.qty}', style: const TextStyle(fontWeight: FontWeight.w900)),
-                                  IconButton(
-                                    onPressed: () async {
-                                      await OrdersDao.I.changeQty(
-                                        itemId: l.itemId,
-                                        orderId: orderId,
-                                        newQty: l.qty + 1,
-                                      );
-                                      await _refreshCart();
-                                    },
-                                    icon: const Icon(Icons.add_circle_outline),
-                                  ),
-                                ],
+                                itemCount: lines.length,
+                                separatorBuilder: (_, __) =>
+                                    const Divider(height: 1),
+                                itemBuilder: (_, i) {
+                                  final l = lines[i];
+                                  return ListTile(
+                                    title: Text(l.name),
+                                    subtitle: Text(
+                                      '${moneyFromCents(l.unitPriceCents)} x ${l.qty}',
+                                    ),
+                                    trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        IconButton(
+                                          onPressed: () async {
+                                            await OrdersDao.I.changeQty(
+                                              itemId: l.itemId,
+                                              orderId: orderId,
+                                              newQty: l.qty - 1,
+                                            );
+                                            await _refreshCart();
+                                          },
+                                          icon: const Icon(
+                                            Icons.remove_circle_outline,
+                                          ),
+                                        ),
+                                        Text(
+                                          '${l.qty}',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                        IconButton(
+                                          onPressed: () async {
+                                            await OrdersDao.I.changeQty(
+                                              itemId: l.itemId,
+                                              orderId: orderId,
+                                              newQty: l.qty + 1,
+                                            );
+                                            await _refreshCart();
+                                          },
+                                          icon: const Icon(
+                                            Icons.add_circle_outline,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
                               ),
-                            );
-                          },
-                        ),
                       ),
 
                       const Divider(height: 1),
@@ -303,19 +390,19 @@ class _OrderScreenState extends State<OrderScreen> {
                         padding: const EdgeInsets.all(10),
                         child: Row(
                           children: [
-                            const Text('Totali:', style: TextStyle(fontWeight: FontWeight.w900)),
+                            const Text(
+                              'Totali:',
+                              style: TextStyle(fontWeight: FontWeight.w900),
+                            ),
                             const Spacer(),
-                            Text(moneyFromCents(totalCents), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                            Text(
+                              moneyFromCents(totalCents),
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
                           ],
-                        ),
-                      ),
-
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: totalCents <= 0 ? null : _checkout,
-                          icon: const Icon(Icons.payments),
-                          label: Text('Checkout (${moneyFromCents(totalCents)})'),
                         ),
                       ),
                     ],
@@ -329,7 +416,11 @@ class _OrderScreenState extends State<OrderScreen> {
     );
   }
 
-  Widget _catItem({required String title, required bool selected, required VoidCallback onTap}) {
+  Widget _catItem({
+    required String title,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       child: InkWell(
@@ -339,14 +430,24 @@ class _OrderScreenState extends State<OrderScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(10),
-            color: selected ? Colors.black.withOpacity(0.08) : Colors.transparent,
+            color: selected
+                ? Colors.black.withOpacity(0.08)
+                : Colors.transparent,
             border: Border.all(color: Colors.grey.withOpacity(0.2)),
           ),
           child: Row(
             children: [
-              Icon(selected ? Icons.check_circle : Icons.circle_outlined, size: 18),
+              Icon(
+                selected ? Icons.check_circle : Icons.circle_outlined,
+                size: 18,
+              ),
               const SizedBox(width: 10),
-              Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w800))),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
             ],
           ),
         ),

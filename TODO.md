@@ -1,0 +1,6 @@
+- [x] Update app_theme.dart to dark mode colors matching login screen
+- [x] Update text styles in app_theme.dart to white
+- [x] Update app_widgets.dart to use dark colors
+- [x] Update main.dart theme to dark mode
+- [x] Update AppTableTile in app_theme.dart for dark mode
+- [x] Test tables functionality and fix if needed (added default tables seeding)

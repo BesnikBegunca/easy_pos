@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../data/dao_tables.dart';
 import '../auth/session.dart';
+import '../theme/app_theme.dart';
+import '../theme/app_widgets.dart';
 import 'order_screen.dart';
 
 class TablesScreen extends StatefulWidget {
@@ -11,116 +13,163 @@ class TablesScreen extends StatefulWidget {
 }
 
 class _TablesScreenState extends State<TablesScreen> {
-  bool loading = true;
-  List<DiningTableRow> tables = [];
-
-  Future<void> _load() async {
-    setState(() => loading = true);
-    final list = await TablesDao.I.listTables();
-    if (!mounted) return;
-    setState(() {
-      tables = list;
-      loading = false;
-    });
-  }
+  late Future<List<DiningTableRow>> _tablesFuture;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _tablesFuture = _loadTables();
+  }
+
+  Future<List<DiningTableRow>> _loadTables() async {
+    try {
+      final list = await TablesDao.I.listTables();
+      if (list.isEmpty) {
+        await TablesDao.I.seedDefaultTables();
+        return await TablesDao.I.listTables();
+      }
+      return list;
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<void> _refresh() async {
+    setState(() {
+      _tablesFuture = _loadTables();
+    });
   }
 
   Future<void> _addTableDialog() async {
+    final tables = await _tablesFuture;
     final nameC = TextEditingController(text: 'Tavolina ${tables.length + 1}');
     final ok = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Shto Tavolinë'),
-        content: SizedBox(
-          width: 420,
-          child: TextField(
-            controller: nameC,
-            decoration: const InputDecoration(labelText: 'Emri'),
-          ),
+      builder: (_) => AppCard(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Add Table', style: AppTheme.titleMedium),
+            const SizedBox(height: AppTheme.spaceL),
+            AppTextField(
+              controller: nameC,
+              hint: 'Table name',
+              prefixIcon: Icons.table_restaurant,
+            ),
+            const SizedBox(height: AppTheme.spaceL),
+            Row(
+              children: [
+                Expanded(
+                  child: AppQuietButton(
+                    label: 'Cancel',
+                    onPressed: () => Navigator.pop(context, false),
+                  ),
+                ),
+                const SizedBox(width: AppTheme.spaceM),
+                Expanded(
+                  child: AppPrimaryButton(
+                    label: 'Add',
+                    icon: Icons.add,
+                    onPressed: () => Navigator.pop(context, true),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Anulo')),
-          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Shto')),
-        ],
       ),
     );
     if (ok != true) return;
     await TablesDao.I.addTable(nameC.text);
-    await _load();
+    await _refresh();
   }
 
   @override
   Widget build(BuildContext context) {
-    final cols = 5; // desktop vibe
-
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Tavolinat', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 12),
-
-          Expanded(
-            child: loading
-                ? const Center(child: CircularProgressIndicator())
-                : GridView.count(
-              crossAxisCount: cols,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              children: [
-                for (final t in tables) _tableCard(t),
-                _addCard(),
-              ],
-            ),
-          ),
+    return AppScaffold(
+      topBar: AppTopBar(
+        title: 'Tables',
+        actions: [
+          TopChip(icon: Icons.refresh, label: 'Refresh', onTap: _refresh),
         ],
       ),
-    );
-  }
-
-  Widget _tableCard(DiningTableRow t) {
-    return InkWell(
-      onTap: () {
-        final waiterId = Session.I.current!.id;
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => OrderScreen(tableId: t.id, tableName: t.name, waiterId: waiterId)),
-        );
-      },
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Icon(Icons.table_restaurant, size: 28),
-              const Spacer(),
-              Text(t.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 6),
-              const Text('Kliko për porosi', style: TextStyle(fontSize: 12)),
-            ],
-          ),
-        ),
+      body: FutureBuilder<List<DiningTableRow>>(
+        future: _tablesFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          } else if (snapshot.hasError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Error loading tables: ${snapshot.error}',
+                    style: AppTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: AppTheme.spaceM),
+                  AppPrimaryButton(label: 'Retry', onPressed: _refresh),
+                ],
+              ),
+            );
+          } else {
+            final tables = snapshot.data ?? [];
+            return RefreshIndicator(
+              onRefresh: _refresh,
+              child: GridView.count(
+                crossAxisCount: 6, // denser grid
+                crossAxisSpacing: AppTheme.spaceS,
+                mainAxisSpacing: AppTheme.spaceS,
+                padding: const EdgeInsets.all(AppTheme.spaceM),
+                children: [
+                  for (final t in tables)
+                    AppTableTile(
+                      name: t.name,
+                      status: t.status,
+                      totalCents: t.totalCents,
+                      onTap: () {
+                        final waiterId = Session.I.current!.id;
+                        Navigator.of(context)
+                            .push(
+                              MaterialPageRoute(
+                                builder: (_) => OrderScreen(
+                                  tableId: t.id,
+                                  tableName: t.name,
+                                  waiterId: waiterId,
+                                ),
+                              ),
+                            )
+                            .then((_) => _refresh()); // Refresh after returning
+                      },
+                    ),
+                  _addTile(),
+                ],
+              ),
+            );
+          }
+        },
       ),
     );
   }
 
-  Widget _addCard() {
+  Widget _addTile() {
     return InkWell(
       onTap: _addTableDialog,
-      child: Card(
-        child: Center(
+      borderRadius: AppTheme.borderRadius,
+      child: Container(
+        padding: const EdgeInsets.all(AppTheme.spaceM),
+        decoration: BoxDecoration(
+          color: AppTheme.tile,
+          borderRadius: AppTheme.borderRadius,
+          border: AppTheme.border,
+        ),
+        child: const Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: const [
-              Icon(Icons.add_circle_outline, size: 36),
-              SizedBox(height: 8),
-              Text('Shto tavolinë', style: TextStyle(fontWeight: FontWeight.w800)),
+            children: [
+              Icon(Icons.add_circle_outline, size: 28, color: Colors.white70),
+              SizedBox(height: AppTheme.spaceXS),
+              Text('Add Table', style: AppTheme.bodySmall),
             ],
           ),
         ),

@@ -2,7 +2,6 @@ import 'package:easy_pos/auth/dao_users.dart';
 import 'package:flutter/material.dart';
 import '../auth/roles.dart';
 import '../auth/session.dart';
-import '../data/dao_users.dart';
 
 class ManageUsersScreen extends StatefulWidget {
   const ManageUsersScreen({super.key});
@@ -59,19 +58,29 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                 children: [
                   TextField(
                     controller: usernameC,
-                    decoration: const InputDecoration(labelText: 'Username (unik)'),
+                    decoration: const InputDecoration(
+                      labelText: 'Username (unik)',
+                    ),
                   ),
                   const SizedBox(height: 10),
                   TextField(
                     controller: fullNameC,
-                    decoration: const InputDecoration(labelText: 'Emri (opsional)'),
+                    decoration: const InputDecoration(
+                      labelText: 'Emri (opsional)',
+                    ),
                   ),
                   const SizedBox(height: 10),
                   DropdownButtonFormField<UserRole>(
                     value: role,
                     items: const [
-                      DropdownMenuItem(value: UserRole.waiter, child: Text('Waiter')),
-                      DropdownMenuItem(value: UserRole.manager, child: Text('Manager')),
+                      DropdownMenuItem(
+                        value: UserRole.waiter,
+                        child: Text('Waiter'),
+                      ),
+                      DropdownMenuItem(
+                        value: UserRole.manager,
+                        child: Text('Manager'),
+                      ),
                     ],
                     onChanged: (v) => setS(() => role = v ?? UserRole.waiter),
                     decoration: const InputDecoration(labelText: 'Roli'),
@@ -80,14 +89,22 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                   TextField(
                     controller: passC,
                     obscureText: true,
-                    decoration: const InputDecoration(labelText: 'Password (min 4)'),
+                    decoration: const InputDecoration(
+                      labelText: 'Password (min 4)',
+                    ),
                   ),
                 ],
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Anulo')),
-              ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Ruaj')),
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Anulo'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Ruaj'),
+              ),
             ],
           ),
         );
@@ -136,9 +153,18 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
                   DropdownButtonFormField<UserRole>(
                     value: role,
                     items: const [
-                      DropdownMenuItem(value: UserRole.waiter, child: Text('Waiter')),
-                      DropdownMenuItem(value: UserRole.manager, child: Text('Manager')),
-                      DropdownMenuItem(value: UserRole.admin, child: Text('Admin')),
+                      DropdownMenuItem(
+                        value: UserRole.waiter,
+                        child: Text('Waiter'),
+                      ),
+                      DropdownMenuItem(
+                        value: UserRole.manager,
+                        child: Text('Manager'),
+                      ),
+                      DropdownMenuItem(
+                        value: UserRole.admin,
+                        child: Text('Admin'),
+                      ),
                     ],
                     onChanged: (v) => setS(() => role = v ?? u.role),
                     decoration: const InputDecoration(labelText: 'Roli'),
@@ -166,8 +192,14 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Anulo')),
-              ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Ruaj')),
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Anulo'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Ruaj'),
+              ),
             ],
           ),
         );
@@ -184,7 +216,12 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     }
 
     try {
-      await UsersDao.I.updateUser(id: u.id, role: role, isActive: active, fullName: fullNameC.text);
+      await UsersDao.I.updateUser(
+        id: u.id,
+        role: role,
+        isActive: active,
+        fullName: fullNameC.text,
+      );
       await _load();
     } catch (e) {
       _err(e.toString());
@@ -204,12 +241,20 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
           child: TextField(
             controller: passC,
             obscureText: true,
-            decoration: const InputDecoration(labelText: 'Password i ri (min 4)'),
+            decoration: const InputDecoration(
+              labelText: 'Password i ri (min 4)',
+            ),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Anulo')),
-          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Ruaj')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Anulo'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Ruaj'),
+          ),
         ],
       ),
     );
@@ -219,7 +264,9 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     try {
       await UsersDao.I.resetPassword(u.id, passC.text);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password u ndryshua ✅')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Password u ndryshua ✅')));
     } catch (e) {
       _err(e.toString());
     }
@@ -228,7 +275,8 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
   void _err(String msg) {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(title: const Text('Gabim'), content: Text(msg)),
+      builder: (_) =>
+          AlertDialog(title: const Text('Gabim'), content: Text(msg)),
     );
   }
 
@@ -252,71 +300,84 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
       body: loading
           ? const Center(child: CircularProgressIndicator())
           : Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                ElevatedButton.icon(
-                  onPressed: _createUserDialog,
-                  icon: const Icon(Icons.person_add),
-                  label: const Text('Shto User'),
-                ),
-                const SizedBox(width: 12),
-                const Text('Këtu krijon Manager/Waiter accounts, aktivizon/çaktivizon, reset pass.'),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: Card(
-                child: ListView.separated(
-                  itemCount: users.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (_, i) {
-                    final u = users[i];
-                    final title = (u.fullName?.trim().isNotEmpty ?? false) ? u.fullName! : u.username;
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: _createUserDialog,
+                        icon: const Icon(Icons.person_add),
+                        label: const Text('Shto User'),
+                      ),
+                      const SizedBox(width: 12),
+                      const Text(
+                        'Këtu krijon Manager/Waiter accounts, aktivizon/çaktivizon, reset pass.',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: Card(
+                      child: ListView.separated(
+                        itemCount: users.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (_, i) {
+                          final u = users[i];
+                          final title = (u.fullName?.trim().isNotEmpty ?? false)
+                              ? u.fullName!
+                              : u.username;
 
-                    return ListTile(
-                      leading: Icon(
-                        u.role == UserRole.admin
-                            ? Icons.security
-                            : u.role == UserRole.manager
-                            ? Icons.manage_accounts
-                            : Icons.person,
+                          return ListTile(
+                            leading: Icon(
+                              u.role == UserRole.admin
+                                  ? Icons.security
+                                  : u.role == UserRole.manager
+                                  ? Icons.manage_accounts
+                                  : Icons.person,
+                            ),
+                            title: Text(title),
+                            subtitle: Text(
+                              '@${u.username} • ${roleToString(u.role)} • ${u.isActive ? "active" : "disabled"}',
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  tooltip: 'Edit',
+                                  onPressed: () => _editUserDialog(u),
+                                  icon: const Icon(Icons.edit),
+                                ),
+                                IconButton(
+                                  tooltip: u.isActive ? 'Disable' : 'Enable',
+                                  onPressed: () async {
+                                    // mos e disable vetveten
+                                    if (u.id == me.id && u.isActive) {
+                                      _err('S’munesh me ç’aktivizu vetveten.');
+                                      return;
+                                    }
+                                    await UsersDao.I.setActive(
+                                      u.id,
+                                      !u.isActive,
+                                    );
+                                    await _load();
+                                  },
+                                  icon: Icon(
+                                    u.isActive
+                                        ? Icons.block
+                                        : Icons.check_circle,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                       ),
-                      title: Text(title),
-                      subtitle: Text('@${u.username} • ${roleToString(u.role)} • ${u.isActive ? "active" : "disabled"}'),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            tooltip: 'Edit',
-                            onPressed: () => _editUserDialog(u),
-                            icon: const Icon(Icons.edit),
-                          ),
-                          IconButton(
-                            tooltip: u.isActive ? 'Disable' : 'Enable',
-                            onPressed: () async {
-                              // mos e disable vetveten
-                              if (u.id == me.id && u.isActive) {
-                                _err('S’munesh me ç’aktivizu vetveten.');
-                                return;
-                              }
-                              await UsersDao.I.setActive(u.id, !u.isActive);
-                              await _load();
-                            },
-                            icon: Icon(u.isActive ? Icons.block : Icons.check_circle),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-      ),
     );
   }
 }

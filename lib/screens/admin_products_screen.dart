@@ -19,7 +19,9 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
     setState(() => loading = true);
     categories = await ProductsDao.I.listCategories();
     selectedCategoryId ??= categories.isEmpty ? null : categories.first.id;
-    products = await ProductsDao.I.listActiveProducts(categoryId: selectedCategoryId);
+    products = await ProductsDao.I.listActiveProducts(
+      categoryId: selectedCategoryId,
+    );
     if (!mounted) return;
     setState(() => loading = false);
   }
@@ -44,13 +46,24 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(controller: nameC, decoration: const InputDecoration(labelText: 'Emri')),
+              TextField(
+                controller: nameC,
+                decoration: const InputDecoration(labelText: 'Emri'),
+              ),
               const SizedBox(height: 10),
-              TextField(controller: priceC, decoration: const InputDecoration(labelText: 'Çmimi (€) p.sh. 2.50')),
+              TextField(
+                controller: priceC,
+                decoration: const InputDecoration(
+                  labelText: 'Çmimi (€) p.sh. 2.50',
+                ),
+              ),
               const SizedBox(height: 10),
               DropdownButtonFormField<int>(
                 value: catId,
-                items: [for (final c in categories) DropdownMenuItem(value: c.id, child: Text(c.name))],
+                items: [
+                  for (final c in categories)
+                    DropdownMenuItem(value: c.id, child: Text(c.name)),
+                ],
                 onChanged: (v) => catId = v,
                 decoration: const InputDecoration(labelText: 'Kategoria'),
               ),
@@ -58,8 +71,14 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Anulo')),
-          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Ruaj')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Anulo'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Ruaj'),
+          ),
         ],
       ),
     );
@@ -69,7 +88,11 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
     final price = double.tryParse(priceC.text.replaceAll(',', '.')) ?? 0;
     final cents = (price * 100).round();
 
-    await ProductsDao.I.addProduct(name: nameC.text, priceCents: cents, categoryId: catId);
+    await ProductsDao.I.addProduct(
+      name: nameC.text,
+      priceCents: cents,
+      categoryId: catId,
+    );
     await _load();
   }
 
@@ -81,13 +104,19 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
         children: [
           Row(
             children: [
-              const Text('Produktet', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+              const Text(
+                'Produktet',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+              ),
               const SizedBox(width: 12),
               SizedBox(
                 width: 240,
                 child: DropdownButtonFormField<int>(
                   value: selectedCategoryId,
-                  items: [for (final c in categories) DropdownMenuItem(value: c.id, child: Text(c.name))],
+                  items: [
+                    for (final c in categories)
+                      DropdownMenuItem(value: c.id, child: Text(c.name)),
+                  ],
                   onChanged: (v) async {
                     selectedCategoryId = v;
                     await _load();
@@ -108,19 +137,22 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
             child: loading
                 ? const Center(child: CircularProgressIndicator())
                 : Card(
-              child: ListView.separated(
-                itemCount: products.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
-                itemBuilder: (_, i) {
-                  final p = products[i];
-                  return ListTile(
-                    title: Text(p.name),
-                    subtitle: Text(p.categoryName ?? ''),
-                    trailing: Text(moneyFromCents(p.priceCents), style: const TextStyle(fontWeight: FontWeight.w900)),
-                  );
-                },
-              ),
-            ),
+                    child: ListView.separated(
+                      itemCount: products.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (_, i) {
+                        final p = products[i];
+                        return ListTile(
+                          title: Text(p.name),
+                          subtitle: Text(p.categoryName ?? ''),
+                          trailing: Text(
+                            moneyFromCents(p.priceCents),
+                            style: const TextStyle(fontWeight: FontWeight.w900),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
           ),
         ],
       ),
