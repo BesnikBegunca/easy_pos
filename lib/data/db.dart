@@ -2,7 +2,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-const int kDbVersion = 4;
+const int kDbVersion = 5; // ✅ rrite versionin (ishte 4)
 
 class AppDb {
   AppDb._();
@@ -27,17 +27,23 @@ class AppDb {
           await _seedDefaults(db);
         },
         onUpgrade: (db, oldV, newV) async {
-          // Handle migration from old versions
+          // ✅ MIGRATIONS
           if (oldV < 4) {
             // Add status column to dining_tables if it doesn't exist
             try {
               await db.execute(
-                'ALTER TABLE dining_tables ADD COLUMN status TEXT NOT NULL DEFAULT \'free\'',
+                "ALTER TABLE dining_tables ADD COLUMN status TEXT NOT NULL DEFAULT 'free'",
               );
-            } catch (e) {
-              // Column might already exist, ignore
-            }
+            } catch (_) {}
           }
+
+          if (oldV < 5) {
+            // ✅ Add note column to order_items if it doesn't exist
+            try {
+              await db.execute("ALTER TABLE order_items ADD COLUMN note TEXT");
+            } catch (_) {}
+          }
+
           // Ensure all tables exist
           await _createAll(db);
           await _seedDefaults(db);

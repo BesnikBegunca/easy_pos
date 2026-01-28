@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import '../data/dao_orders.dart';
 import '../data/dao_products.dart';
 import '../util/money.dart';
@@ -35,23 +36,44 @@ class _OrderScreenState extends State<OrderScreen> {
   List<OrderLine> lines = [];
 
   Future<void> _init() async {
-    setState(() => loading = true);
+    try {
+      setState(() {
+        loading = true;
+      });
 
-    orderId = await OrdersDao.I.getOrCreateOpenOrder(
-      tableId: widget.tableId,
-      waiterId: widget.waiterId,
-    );
+      // Get or create order with timeout
+      orderId = await OrdersDao.I
+          .getOrCreateOpenOrder(
+            tableId: widget.tableId,
+            waiterId: widget.waiterId,
+          )
+          .timeout(
+            const Duration(seconds: 10),
+            onTimeout: () => throw TimeoutException('Order creation timeout'),
+          );
 
-    categories = await ProductsDao.I.listCategories();
+      // Load categories
+      categories = await ProductsDao.I.listCategories().timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => <CategoryRow>[],
+      );
 
-    // nëse s’ka kategori, prap mos me crash
-    selectedCategoryId = categories.isEmpty ? null : categories.first.id;
+      selectedCategoryId = categories.isEmpty ? null : categories.first.id;
 
-    await _reloadProducts();
-    await _refreshCart();
+      // Load initial products and cart
+      await _reloadProducts();
+      await _refreshCart();
 
-    if (!mounted) return;
-    setState(() => loading = false);
+      if (!mounted) return;
+      setState(() => loading = false);
+    } catch (e) {
+      print('Error initializing order: $e');
+      if (mounted) {
+        setState(() {
+          loading = false;
+        });
+      }
+    }
   }
 
   Future<void> _reloadProducts() async {
@@ -158,6 +180,28 @@ class _OrderScreenState extends State<OrderScreen> {
       return AppScaffold(
         topBar: AppTopBar(title: widget.tableName),
         body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    // Show error if loading failed
+    if (orderId == 0) {
+      return AppScaffold(
+        topBar: AppTopBar(title: widget.tableName),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 48, color: Colors.red),
+              const SizedBox(height: 16),
+              Text('Gabim në hapjen e tavolinës', style: AppTheme.titleMedium),
+              const SizedBox(height: 24),
+              AppPrimaryButton(
+                label: 'Kthehu',
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
