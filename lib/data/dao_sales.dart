@@ -79,6 +79,19 @@ ORDER BY total_cents DESC, u.username ASC;
     });
   }
 
+  Future<int> sumTotalCentsBetween({
+    required int waiterId,
+    required int startMs,
+    required int endMs,
+  }) async {
+    final db = await AppDb.I.db;
+    final rows = await db.rawQuery(
+      'SELECT COALESCE(SUM(total_cents),0) AS s FROM sales WHERE waiter_id = ? AND created_at >= ? AND created_at < ?',
+      [waiterId, startMs, endMs],
+    );
+    return (rows.first['s'] as int?) ?? 0;
+  }
+
   (int startMs, int endMs) _range(RangeKind k, DateTime a) {
     final local = DateTime(a.year, a.month, a.day);
 

@@ -35,26 +35,6 @@ class OrdersDao {
   }) async {
     final db = await AppDb.I.db;
 
-    // ✅ Ensure table exists (optional safety)
-    final tableExists = await db.query(
-      'dining_tables',
-      where: 'id=?',
-      whereArgs: [tableId],
-      limit: 1,
-    );
-
-    if (tableExists.isEmpty) {
-      // ⚠️ Don't set explicit id unless you really need it.
-      // But keeping your original behavior:
-      await db.insert('dining_tables', {
-        'id': tableId,
-        'name': 'Tavolina $tableId',
-        'status': 'free',
-        'is_active': 1,
-        'created_at': DateTime.now().millisecondsSinceEpoch,
-      });
-    }
-
     // ✅ If open order exists return it
     final existing = await db.query(
       'orders',
@@ -65,22 +45,45 @@ class OrdersDao {
 
     if (existing.isNotEmpty) return existing.first['id'] as int;
 
-    // ✅ Mark table status open
-    await db.update(
-      'dining_tables',
-      {'status': 'open'},
-      where: 'id=?',
-      whereArgs: [tableId],
-    );
+    // ✅ Mark table status open and create order atomically inside a transaction
+    try {
+      return await db.transaction((txn) async {
+        final updated = await txn.update(
+          'dining_tables',
+          {'status': 'open'},
+          where: 'id=?',
+          whereArgs: [tableId],
+        );
+        if (updated == 0) {
+          throw Exception('Table not found or inactive: $tableId');
+        }
 
-    // ✅ Create new open order
-    return db.insert('orders', {
-      'table_id': tableId,
-      'waiter_id': waiterId,
-      'status': 'open',
-      'total_cents': 0,
-      'created_at': DateTime.now().millisecondsSinceEpoch,
-    });
+        // Validate waiter exists to produce clearer errors for foreign key issues
+        final waiterRows = await txn.query(
+          'users',
+          where: 'id=?',
+          whereArgs: [waiterId],
+          limit: 1,
+        );
+        if (waiterRows.isEmpty) {
+          throw Exception('Waiter not found: $waiterId');
+        }
+
+        final id = await txn.insert('orders', {
+          'table_id': tableId,
+          'waiter_id': waiterId,
+          'status': 'open',
+          'total_cents': 0,
+          'created_at': DateTime.now().millisecondsSinceEpoch,
+        });
+
+        return id;
+      });
+    } catch (e, st) {
+      // Log full error for debugging and rethrow so callers can handle it
+      print('Error creating/opening order for table $tableId: $e\n$st');
+      rethrow;
+    }
   }
 
   /// ✅ Order lines (cart)
@@ -265,6 +268,13 @@ ORDER BY oi.id DESC
         paidBy: paidBy,
       );
 
+      // ✅ sales row for dashboards
+      await txn.insert('sales', {
+        'waiter_id': waiterId,
+        'total_cents': total,
+        'created_at': DateTime.now().millisecondsSinceEpoch,
+      });
+
       // ✅ table back to free
       await txn.update(
         'dining_tables',
@@ -298,5 +308,27 @@ ORDER BY oi.id DESC
       where: 'id=?',
       whereArgs: [orderId],
     );
+  }
+
+  Future<int> countOpenOrdersByWaiter(int waiterId) async {
+    final db = await AppDb.I.db;
+    final rows = await db.rawQuery(
+      'SELECT COUNT(*) AS c FROM orders WHERE waiter_id = ? AND status = "open"',
+      [waiterId],
+    );
+    return (rows.first['c'] as int?) ?? 0;
+  }
+
+  Future<int> countOrdersByWaiterInRange(
+    int waiterId,
+    int startMs,
+    int endMs,
+  ) async {
+    final db = await AppDb.I.db;
+    final rows = await db.rawQuery(
+      'SELECT COUNT(*) AS c FROM orders WHERE waiter_id = ? AND created_at >= ? AND created_at < ?',
+      [waiterId, startMs, endMs],
+    );
+    return (rows.first['c'] as int?) ?? 0;
   }
 }

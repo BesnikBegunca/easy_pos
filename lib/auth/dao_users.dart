@@ -9,6 +9,8 @@ class AppUserRow {
   final String? fullName;
   final UserRole role;
   final bool isActive;
+  final bool isOnShift;
+  final int? shiftStartedAt;
   final int createdAt;
 
   AppUserRow({
@@ -17,6 +19,8 @@ class AppUserRow {
     required this.fullName,
     required this.role,
     required this.isActive,
+    required this.isOnShift,
+    required this.shiftStartedAt,
     required this.createdAt,
   });
 }
@@ -32,13 +36,15 @@ class UsersDao {
       orderBy: 'is_active DESC, role ASC, username ASC',
     );
 
-    return rows.map((u) {
+    return rows.map<AppUserRow>((u) {
       return AppUserRow(
         id: u['id'] as int,
         username: u['username'] as String,
         fullName: u['full_name'] as String?,
         role: roleFromString(u['role'] as String),
         isActive: (u['is_active'] as int) == 1,
+        isOnShift: ((u['on_shift'] as int?) ?? 0) == 1,
+        shiftStartedAt: (u['shift_started_at'] as int?),
         createdAt: u['created_at'] as int,
       );
     }).toList();
@@ -54,7 +60,8 @@ class UsersDao {
     final uname = username.trim();
 
     if (uname.isEmpty) throw Exception('Username është i zbrazët.');
-    if (password.trim().length < 4) throw Exception('Password duhet min 4 karaktere.');
+    if (password.trim().length < 4)
+      throw Exception('Password duhet min 4 karaktere.');
 
     try {
       final id = await db.insert('users', {
@@ -79,6 +86,7 @@ class UsersDao {
     required int id,
     required UserRole role,
     required bool isActive,
+    required bool isOnShift,
     String? fullName,
   }) async {
     final db = await AppDb.I.db;
@@ -88,6 +96,7 @@ class UsersDao {
         'role': roleToString(role),
         'full_name': fullName?.trim(),
         'is_active': isActive ? 1 : 0,
+        'on_shift': isOnShift ? 1 : 0,
       },
       where: 'id=?',
       whereArgs: [id],
@@ -104,8 +113,20 @@ class UsersDao {
     );
   }
 
+  Future<void> setShift(int id, bool onShift) async {
+    final db = await AppDb.I.db;
+    final values = <String, Object?>{
+      'on_shift': onShift ? 1 : 0,
+      'shift_started_at': onShift
+          ? DateTime.now().millisecondsSinceEpoch
+          : null,
+    };
+    await db.update('users', values, where: 'id=?', whereArgs: [id]);
+  }
+
   Future<void> resetPassword(int id, String newPassword) async {
-    if (newPassword.trim().length < 4) throw Exception('Password duhet min 4 karaktere.');
+    if (newPassword.trim().length < 4)
+      throw Exception('Password duhet min 4 karaktere.');
     await AuthService.I.setPassword(id, newPassword);
   }
 }

@@ -8,9 +8,9 @@ class AppTheme {
   static const Color success = Color(0xFF10B981);
   static const Color warning = Color(0xFFF59E0B);
   static const Color error = Color(0xFFEF4444);
-  static const Color background = Color(0xFF0B0F14);
-  static const Color surface = Color(0xFF10161D);
-  static const Color tile = Color(0xFF1A222C);
+  static const Color background = Color(0xFF080C10);
+  static const Color surface = Color(0xFF0D1217);
+  static const Color tile = Color(0xFF0F1419);
 
   // Spacing
   static const double spaceXS = 4;
@@ -57,7 +57,7 @@ class AppTheme {
   static const TextStyle bodySmall = TextStyle(
     fontSize: 12,
     fontWeight: FontWeight.w400,
-    color: Colors.white70,
+    color: Colors.white,
   );
 }
 
@@ -140,7 +140,7 @@ class AppTableTile extends StatelessWidget {
                 ),
               ),
             ),
-            if (status == 'open' && totalCents > 0) ...[
+            if (status == 'open') ...[
               const SizedBox(height: AppTheme.spaceXS), // smaller space
               Text(
                 moneyFromCents(totalCents),

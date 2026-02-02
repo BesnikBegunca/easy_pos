@@ -2,6 +2,7 @@ import 'package:easy_pos/screens/tables_screen.dart';
 import 'package:flutter/material.dart';
 import '../auth/session.dart';
 import '../auth/roles.dart';
+import 'admin_dashboard.dart';
 
 class ShellScreen extends StatelessWidget {
   const ShellScreen({super.key});
@@ -16,8 +17,10 @@ class ShellScreen extends StatelessWidget {
       body = const TablesScreen();
     else if (u.role == UserRole.manager)
       body = const TablesScreen(); // + ma vonë reports
+    else if (u.role == UserRole.admin)
+      body = const AdminDashboard();
     else
-      body = const TablesScreen(); // + ma vonë admin screens
+      body = const TablesScreen(); // fallback
 
     return Scaffold(
       appBar: AppBar(

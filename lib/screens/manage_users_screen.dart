@@ -220,6 +220,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
         id: u.id,
         role: role,
         isActive: active,
+        isOnShift: u.isOnShift,
         fullName: fullNameC.text,
       );
       await _load();

@@ -21,6 +21,7 @@ class AppScaffold extends StatelessWidget {
       backgroundColor: AppTheme.background,
       appBar: topBar != null
           ? AppBar(
+              leading: topBar!.leading,
               title: Text(topBar!.title, style: AppTheme.titleMedium),
               backgroundColor: AppTheme.surface,
               foregroundColor: Colors.white,
@@ -37,12 +38,13 @@ class AppScaffold extends StatelessWidget {
 class AppTopBar extends StatelessWidget {
   final String title;
   final List<Widget>? actions;
+  final Widget? leading;
 
-  const AppTopBar({super.key, required this.title, this.actions});
+  const AppTopBar({super.key, required this.title, this.actions, this.leading});
 
   @override
   Widget build(BuildContext context) {
-    return AppBar(title: Text(title), actions: actions);
+    return AppBar(leading: leading, title: Text(title), actions: actions);
   }
 }
 
@@ -91,6 +93,10 @@ class AppPrimaryButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return ElevatedButton.icon(
       onPressed: onPressed,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: AppTheme.primary,
+        foregroundColor: Colors.white,
+      ),
       icon: icon != null ? Icon(icon) : const SizedBox.shrink(),
       label: Text(label),
     );
@@ -116,10 +122,17 @@ class AppQuietButton extends StatelessWidget {
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
         side: BorderSide(color: Colors.white.withOpacity(0.3)),
-        foregroundColor: onPressed == null ? Colors.white38 : Colors.white70,
+        foregroundColor: onPressed == null ? Colors.white38 : Colors.white,
       ),
-      icon: icon != null ? Icon(icon) : const SizedBox.shrink(),
-      label: Text(label),
+      icon: icon != null
+          ? Icon(icon, color: onPressed == null ? Colors.white38 : Colors.white)
+          : const SizedBox.shrink(),
+      label: Text(
+        label,
+        style: TextStyle(
+          color: onPressed == null ? Colors.white38 : Colors.white,
+        ),
+      ),
     );
   }
 }
@@ -153,12 +166,12 @@ class AppTextField extends StatelessWidget {
       cursorColor: AppTheme.primary,
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(color: Colors.white70),
+        labelStyle: const TextStyle(color: Colors.white),
         hintText: hint,
-        hintStyle: const TextStyle(color: Colors.white38),
+        hintStyle: const TextStyle(color: Colors.white),
         suffixIcon: suffixIcon,
         prefixIcon: prefixIcon != null
-            ? Icon(prefixIcon, color: Colors.white70)
+            ? Icon(prefixIcon, color: Colors.white)
             : null,
         border: OutlineInputBorder(
           borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
@@ -194,7 +207,12 @@ class TopChip extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(20),
       onTap: onTap,
-      child: Chip(avatar: Icon(icon, size: 18), label: Text(label)),
+      child: Chip(
+        avatar: Icon(icon, size: 18, color: Colors.white),
+        label: Text(label, style: const TextStyle(color: Colors.white)),
+        backgroundColor: Colors.transparent,
+        side: BorderSide(color: Colors.white.withOpacity(0.06)),
+      ),
     );
   }
 }

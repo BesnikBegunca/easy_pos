@@ -19,8 +19,15 @@ class _DashboardManagerState extends State<DashboardManager> {
 
   Future<void> _load() async {
     setState(() => loading = true);
-    final sumAll = await SalesDao.I.sumTotalCents(range: range, anchor: DateTime.now());
-    final rows = await SalesDao.I.totalsByWaiter(range: range, anchor: DateTime.now());
+    final sumAll = await SalesDao.I.sumTotalCents(
+      range: range,
+      anchor: DateTime.now(),
+    );
+    final rows = await SalesDao.I.totalsByWaiter(
+      range: range,
+      anchor: DateTime.now(),
+    );
+    // TODO: filter or show manager-specific widgets
     if (!mounted) return;
     setState(() {
       totalAllCents = sumAll;
@@ -47,7 +54,10 @@ class _DashboardManagerState extends State<DashboardManager> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Manager Dashboard', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          const Text(
+            'Manager Dashboard',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+          ),
           const SizedBox(height: 12),
 
           Row(
@@ -77,11 +87,17 @@ class _DashboardManagerState extends State<DashboardManager> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Totali i lokalit (${_rangeLabel(range)})', style: const TextStyle(fontWeight: FontWeight.w600)),
+                        Text(
+                          'Totali i lokalit (${_rangeLabel(range)})',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
                         const SizedBox(height: 6),
                         Text(
                           loading ? '...' : moneyFromCents(totalAllCents),
-                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                          ),
                         ),
                         const SizedBox(height: 6),
                         const Text('Breakdown per waiter poshtë.'),
@@ -102,22 +118,26 @@ class _DashboardManagerState extends State<DashboardManager> {
                 child: loading
                     ? const Center(child: CircularProgressIndicator())
                     : ListView.separated(
-                  itemCount: perWaiter.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (_, i) {
-                    final w = perWaiter[i];
-                    final name = (w.fullName?.trim().isNotEmpty ?? false) ? w.fullName! : w.username;
-                    return ListTile(
-                      leading: const Icon(Icons.person),
-                      title: Text(name),
-                      subtitle: Text('@${w.username}'),
-                      trailing: Text(
-                        moneyFromCents(w.totalCents),
-                        style: const TextStyle(fontWeight: FontWeight.w800),
+                        itemCount: perWaiter.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (_, i) {
+                          final w = perWaiter[i];
+                          final name = (w.fullName?.trim().isNotEmpty ?? false)
+                              ? w.fullName!
+                              : w.username;
+                          return ListTile(
+                            leading: const Icon(Icons.person),
+                            title: Text(name),
+                            subtitle: Text('@${w.username}'),
+                            trailing: Text(
+                              moneyFromCents(w.totalCents),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
               ),
             ),
           ),

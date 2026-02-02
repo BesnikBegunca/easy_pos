@@ -57,8 +57,7 @@ class TablesDao {
     final Map<int, _TableData> data = {};
     for (final row in rows) {
       final tableId = row['id'] as int;
-      final status = (row['status'] as String?) ?? 'free';
-      data[tableId] = _TableData(status: status, totalCents: 0);
+      data[tableId] = _TableData(status: 'free', totalCents: 0);
     }
 
     // Get totals for open orders
@@ -74,7 +73,7 @@ class TablesDao {
       final totalCents = row['total_cents'] as int;
       if (data.containsKey(tableId)) {
         data[tableId] = _TableData(
-          status: data[tableId]!.status,
+          status: totalCents > 0 ? 'open' : 'free',
           totalCents: totalCents,
         );
       }
@@ -94,12 +93,31 @@ class TablesDao {
 
   Future<void> seedDefaultTables() async {
     final db = await AppDb.I.db;
+    final now = DateTime.now().millisecondsSinceEpoch;
     for (int i = 1; i <= 10; i++) {
-      await db.insert('dining_tables', {
-        'name': 'Tavolina $i',
-        'is_active': 1,
-        'created_at': DateTime.now().millisecondsSinceEpoch,
-      });
+      final name = 'Tavolina $i';
+      final existing = await db.query(
+        'dining_tables',
+        where: 'id=?',
+        whereArgs: [i],
+        limit: 1,
+      );
+      if (existing.isEmpty) {
+        await db.insert('dining_tables', {
+          'id': i,
+          'name': name,
+          'is_active': 1,
+          'created_at': now,
+        });
+      } else {
+        // Ensure it's active and has correct name
+        await db.update(
+          'dining_tables',
+          {'is_active': 1, 'name': name},
+          where: 'id=?',
+          whereArgs: [i],
+        );
+      }
     }
   }
 }

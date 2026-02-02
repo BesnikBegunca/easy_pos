@@ -18,10 +18,23 @@ class App extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
+      theme: ThemeData.dark().copyWith(
         useMaterial3: true,
+        colorScheme: ColorScheme.dark(
+          primary: AppTheme.primary,
+          secondary: AppTheme.secondary,
+        ),
         primaryColor: AppTheme.primary,
         scaffoldBackgroundColor: AppTheme.background,
+        textTheme: ThemeData.dark().textTheme.apply(
+          bodyColor: Colors.white,
+          displayColor: Colors.white,
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: AppTheme.surface,
+          foregroundColor: Colors.white,
+        ),
+        iconTheme: const IconThemeData(color: Colors.white70),
       ),
       initialRoute: '/login',
       routes: {
