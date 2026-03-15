@@ -2,7 +2,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-const int kDbVersion = 7; // bumped to add shift_started_at
+const int kDbVersion = 10;
 
 class AppDb {
   AppDb._();
@@ -27,9 +27,9 @@ class AppDb {
           await _seedDefaults(db);
         },
         onUpgrade: (db, oldV, newV) async {
-          // ✅ MIGRATIONS
+          // MIGRATIONS (safe try/catch)
+
           if (oldV < 4) {
-            // Add status column to dining_tables if it doesn't exist
             try {
               await db.execute(
                 "ALTER TABLE dining_tables ADD COLUMN status TEXT NOT NULL DEFAULT 'free'",
@@ -38,21 +38,25 @@ class AppDb {
           }
 
           if (oldV < 5) {
-            // ✅ Add note column to order_items if it doesn't exist
             try {
               await db.execute("ALTER TABLE order_items ADD COLUMN note TEXT");
             } catch (_) {}
           }
 
           if (oldV < 6) {
-            // Add on_shift to users
             try {
               await db.execute(
                 "ALTER TABLE users ADD COLUMN on_shift INTEGER NOT NULL DEFAULT 0",
               );
             } catch (_) {}
 
-            // Create settlements table if missing
+            try {
+              await db.execute(
+                "ALTER TABLE users ADD COLUMN shift_started_at INTEGER",
+              );
+            } catch (_) {}
+
+            // settlements table
             try {
               await db.execute('''
 CREATE TABLE IF NOT EXISTS settlements(
@@ -75,26 +79,37 @@ CREATE TABLE IF NOT EXISTS settlements(
             } catch (_) {}
           }
 
-          if (oldV < 7) {
-            // Add shift_started_at to users
+          if (oldV < 8) {
             try {
               await db.execute(
-                "ALTER TABLE users ADD COLUMN shift_started_at INTEGER",
+                "ALTER TABLE orders ADD COLUMN settled_id INTEGER",
+              );
+            } catch (_) {}
+
+            try {
+              await db.execute(
+                "ALTER TABLE dining_tables ADD COLUMN waiter_id INTEGER",
               );
             } catch (_) {}
           }
 
-          // Ensure all tables exist
+          if (oldV < 9) {
+            try {
+              await db.execute(
+                "ALTER TABLE payments ADD COLUMN order_id INTEGER",
+              );
+            } catch (_) {}
+          }
+
+          // Ensure tables exist (with latest schema) + seed
           await _createAll(db);
           await _seedDefaults(db);
         },
-        // Run on every open to ensure required columns exist even if migrations were missed
         onOpen: (db) async {
           try {
             await _ensureTableColumns(db);
           } catch (e) {
-            // Log but don't crash
-            print('Error ensuring table columns on open: $e');
+            print('Error ensuring columns on open: $e');
           }
         },
       ),
@@ -113,8 +128,8 @@ CREATE TABLE IF NOT EXISTS users(
   role TEXT NOT NULL, -- admin/manager/waiter
   full_name TEXT,
   is_active INTEGER NOT NULL DEFAULT 1,
-  on_shift INTEGER NOT NULL DEFAULT 0, -- 0/1
-  shift_started_at INTEGER, -- nullable timestamp when shift started
+  on_shift INTEGER NOT NULL DEFAULT 0,
+  shift_started_at INTEGER,
   created_at INTEGER NOT NULL
 );
 ''');
@@ -130,12 +145,13 @@ CREATE TABLE IF NOT EXISTS sales(
 );
 ''');
 
-    // TABLES
+    // TABLES  ✅ waiter_id included
     await db.execute('''
 CREATE TABLE IF NOT EXISTS dining_tables(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'free', -- free/open/paid
+  waiter_id INTEGER,
   is_active INTEGER NOT NULL DEFAULT 1,
   created_at INTEGER NOT NULL
 );
@@ -163,7 +179,7 @@ CREATE TABLE IF NOT EXISTS products(
 );
 ''');
 
-    // ORDERS
+    // ORDERS ✅ settled_id included
     await db.execute('''
 CREATE TABLE IF NOT EXISTS orders(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -173,6 +189,7 @@ CREATE TABLE IF NOT EXISTS orders(
   total_cents INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL,
   closed_at INTEGER,
+  settled_id INTEGER,
   FOREIGN KEY(table_id) REFERENCES dining_tables(id),
   FOREIGN KEY(waiter_id) REFERENCES users(id)
 );
@@ -188,21 +205,24 @@ CREATE TABLE IF NOT EXISTS order_items(
   unit_price_cents INTEGER NOT NULL,
   line_total_cents INTEGER NOT NULL,
   note TEXT,
+  is_printed INTEGER NOT NULL DEFAULT 0,
   FOREIGN KEY(order_id) REFERENCES orders(id),
   FOREIGN KEY(product_id) REFERENCES products(id)
 );
 ''');
 
-    // PAYMENTS
+    // PAYMENTS ✅ order_id included
     await db.execute('''
 CREATE TABLE IF NOT EXISTS payments(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   table_id INTEGER NOT NULL,
+  order_id INTEGER,
   total_cents INTEGER NOT NULL,
   method TEXT NOT NULL, -- cash/card/mixed
   paid_at INTEGER NOT NULL,
   paid_by INTEGER NOT NULL,
   FOREIGN KEY(table_id) REFERENCES dining_tables(id),
+  FOREIGN KEY(order_id) REFERENCES orders(id),
   FOREIGN KEY(paid_by) REFERENCES users(id)
 );
 ''');
@@ -227,7 +247,7 @@ CREATE TABLE IF NOT EXISTS day_sessions(
 );
 ''');
 
-    // SETTLEMENTS per waiter (admin actions)
+    // SETTLEMENTS
     await db.execute('''
 CREATE TABLE IF NOT EXISTS settlements(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -249,7 +269,6 @@ CREATE TABLE IF NOT EXISTS settlements(
   }
 
   Future<void> _seedDefaults(Database db) async {
-    // ✅ Seed 10 tables vetëm nëse s’ka asnjë
     final tCountRows = await db.rawQuery(
       'SELECT COUNT(*) AS c FROM dining_tables',
     );
@@ -261,18 +280,17 @@ CREATE TABLE IF NOT EXISTS settlements(
         await db.insert('dining_tables', {
           'name': 'Tavolina $i',
           'status': 'free',
+          'waiter_id': null,
           'is_active': 1,
           'created_at': now,
         });
       }
     }
 
-    // ✅ Seed categories and products
     await _seedBasicData(db);
   }
 
   Future<void> _seedBasicData(Database db) async {
-    // Seed basic categories
     final categories = [
       {'name': 'Pije', 'sort_index': 1},
       {'name': 'Ushqim', 'sort_index': 2},
@@ -291,7 +309,6 @@ CREATE TABLE IF NOT EXISTS settlements(
       }
     }
 
-    // Seed a few basic products
     final products = [
       {'name': 'Coca Cola', 'price_cents': 150, 'category_name': 'Pije'},
       {
@@ -309,70 +326,125 @@ CREATE TABLE IF NOT EXISTS settlements(
         whereArgs: [prod['category_name']],
         limit: 1,
       );
-      if (catRows.isNotEmpty) {
-        final catId = catRows.first['id'] as int;
-        final existing = await db.query(
-          'products',
-          where: 'name=?',
-          whereArgs: [prod['name']],
-          limit: 1,
-        );
-        if (existing.isEmpty) {
-          await db.insert('products', {
-            'name': prod['name'],
-            'price_cents': prod['price_cents'],
-            'category_id': catId,
-            'is_active': 1,
-            'created_at': DateTime.now().millisecondsSinceEpoch,
-          });
-        }
+      if (catRows.isEmpty) continue;
+
+      final catId = catRows.first['id'] as int;
+      final existing = await db.query(
+        'products',
+        where: 'name=?',
+        whereArgs: [prod['name']],
+        limit: 1,
+      );
+      if (existing.isEmpty) {
+        await db.insert('products', {
+          'name': prod['name'],
+          'price_cents': prod['price_cents'],
+          'category_id': catId,
+          'is_active': 1,
+          'created_at': DateTime.now().millisecondsSinceEpoch,
+        });
       }
     }
   }
 
-  /// Ensure missing columns exist for older DBs (safe to run on open)
   Future<void> _ensureTableColumns(Database db) async {
-    try {
-      final info = await db.rawQuery('PRAGMA table_info(dining_tables)');
-      final colNames = info.map((r) => (r['name'] as String?) ?? '').toList();
-      if (!colNames.contains('status')) {
-        try {
-          await db.execute(
-            "ALTER TABLE dining_tables ADD COLUMN status TEXT NOT NULL DEFAULT 'free'",
-          );
-          print('Added missing column `status` to dining_tables');
-        } catch (e) {
-          print('Failed to add `status` column: $e');
-        }
-      }
+    // dining_tables.status + waiter_id
+    final dt = await db.rawQuery('PRAGMA table_info(dining_tables)');
+    final dtCols = dt.map((r) => (r['name'] as String?) ?? '').toList();
 
-      // Ensure order_items has note column (safe if already present)
-      final oi = await db.rawQuery('PRAGMA table_info(order_items)');
-      final oiCols = oi.map((r) => (r['name'] as String?) ?? '').toList();
-      if (!oiCols.contains('note')) {
-        try {
-          await db.execute('ALTER TABLE order_items ADD COLUMN note TEXT');
-          print('Added missing column `note` to order_items');
-        } catch (e) {
-          print('Failed to add `note` column: $e');
-        }
+    if (!dtCols.contains('status')) {
+      try {
+        await db.execute(
+          "ALTER TABLE dining_tables ADD COLUMN status TEXT NOT NULL DEFAULT 'free'",
+        );
+        print('Added missing column `status` to dining_tables');
+      } catch (e) {
+        print('Failed to add `status`: $e');
       }
+    }
 
-      // Ensure users have shift_started_at
-      final ui = await db.rawQuery('PRAGMA table_info(users)');
-      final uCols = ui.map((r) => (r['name'] as String?) ?? '').toList();
-      if (!uCols.contains('shift_started_at')) {
-        try {
-          await db.execute(
-            'ALTER TABLE users ADD COLUMN shift_started_at INTEGER',
-          );
-          print('Added missing column `shift_started_at` to users');
-        } catch (e) {
-          print('Failed to add `shift_started_at` column: $e');
-        }
+    if (!dtCols.contains('waiter_id')) {
+      try {
+        await db.execute(
+          "ALTER TABLE dining_tables ADD COLUMN waiter_id INTEGER",
+        );
+        print('Added missing column `waiter_id` to dining_tables');
+      } catch (e) {
+        print('Failed to add `waiter_id`: $e');
       }
-    } catch (e) {
-      print('Error checking table info: $e');
+    }
+
+    // order_items.note
+    final oi = await db.rawQuery('PRAGMA table_info(order_items)');
+    final oiCols = oi.map((r) => (r['name'] as String?) ?? '').toList();
+    if (!oiCols.contains('note')) {
+      try {
+        await db.execute('ALTER TABLE order_items ADD COLUMN note TEXT');
+        print('Added missing column `note` to order_items');
+      } catch (e) {
+        print('Failed to add `note`: $e');
+      }
+    }
+
+    // users.shift_started_at
+    final uInfo = await db.rawQuery('PRAGMA table_info(users)');
+    final uCols = uInfo.map((r) => (r['name'] as String?) ?? '').toList();
+    if (!uCols.contains('shift_started_at')) {
+      try {
+        await db.execute(
+          'ALTER TABLE users ADD COLUMN shift_started_at INTEGER',
+        );
+        print('Added missing column `shift_started_at` to users');
+      } catch (e) {
+        print('Failed to add `shift_started_at`: $e');
+      }
+    }
+
+    if (!uCols.contains('on_shift')) {
+      try {
+        await db.execute(
+          'ALTER TABLE users ADD COLUMN on_shift INTEGER NOT NULL DEFAULT 0',
+        );
+        print('Added missing column `on_shift` to users');
+      } catch (e) {
+        print('Failed to add `on_shift`: $e');
+      }
+    }
+
+    // orders.settled_id
+    final oInfo = await db.rawQuery('PRAGMA table_info(orders)');
+    final oCols = oInfo.map((r) => (r['name'] as String?) ?? '').toList();
+    if (!oCols.contains('settled_id')) {
+      try {
+        await db.execute('ALTER TABLE orders ADD COLUMN settled_id INTEGER');
+        print('Added missing column `settled_id` to orders');
+      } catch (e) {
+        print('Failed to add `settled_id`: $e');
+      }
+    }
+
+    // payments.order_id ✅ THIS FIXES YOUR 00
+    final pInfo = await db.rawQuery('PRAGMA table_info(payments)');
+    final pCols = pInfo.map((r) => (r['name'] as String?) ?? '').toList();
+    if (!pCols.contains('order_id')) {
+      try {
+        await db.execute('ALTER TABLE payments ADD COLUMN order_id INTEGER');
+        print('Added missing column `order_id` to payments');
+      } catch (e) {
+        print('Failed to add `order_id`: $e');
+      }
+    }
+
+    // order_items.is_printed
+    if (!oiCols.contains('is_printed')) {
+      try {
+        await db.execute(
+          'ALTER TABLE order_items ADD COLUMN is_printed INTEGER NOT NULL DEFAULT 0',
+        );
+        print('Added missing column `is_printed` to order_items');
+      } catch (e) {
+        print('Failed to add `is_printed`: $e');
+      }
     }
   }
 }

@@ -27,16 +27,25 @@ class TablesDao {
   TablesDao._();
   static final TablesDao I = TablesDao._();
 
-  Future<List<DiningTableRow>> listTables() async {
+  Future<List<DiningTableRow>> listTables({int? waiterId}) async {
     final db = await AppDb.I.db;
+    String whereClause = 'is_active=1';
+    List<Object?> whereArgs = [];
+
+    if (waiterId != null) {
+      whereClause += ' AND waiter_id=?';
+      whereArgs.add(waiterId);
+    }
+
     final rows = await db.query(
       'dining_tables',
-      where: 'is_active=1',
+      where: whereClause,
+      whereArgs: whereArgs,
       orderBy: 'id ASC',
     );
 
     // Get table statuses and totals based on orders
-    final tableData = await _getTableData();
+    final tableData = await _getTableData(waiterId: waiterId);
 
     return rows
         .map(
@@ -51,9 +60,21 @@ class TablesDao {
         .toList();
   }
 
-  Future<Map<int, _TableData>> _getTableData() async {
+  Future<Map<int, _TableData>> _getTableData({int? waiterId}) async {
     final db = await AppDb.I.db;
-    final rows = await db.query('dining_tables', where: 'is_active=1');
+    String whereClause = 'is_active=1';
+    List<Object?> whereArgs = [];
+
+    if (waiterId != null) {
+      whereClause += ' AND waiter_id=?';
+      whereArgs.add(waiterId);
+    }
+
+    final rows = await db.query(
+      'dining_tables',
+      where: whereClause,
+      whereArgs: whereArgs,
+    );
     final Map<int, _TableData> data = {};
     for (final row in rows) {
       final tableId = row['id'] as int;
@@ -61,13 +82,21 @@ class TablesDao {
     }
 
     // Get totals for open orders
+    String orderWhere = 'o.status = \'open\'';
+    List<Object?> orderArgs = [];
+
+    if (waiterId != null) {
+      orderWhere += ' AND o.waiter_id=?';
+      orderArgs.add(waiterId);
+    }
+
     final totalRows = await db.rawQuery('''
       SELECT o.table_id, SUM(oi.line_total_cents) AS total_cents
       FROM orders o
       JOIN order_items oi ON oi.order_id = o.id
-      WHERE o.status = 'open'
+      WHERE $orderWhere
       GROUP BY o.table_id
-    ''');
+    ''', orderArgs);
     for (final row in totalRows) {
       final tableId = row['table_id'] as int;
       final totalCents = row['total_cents'] as int;
@@ -82,13 +111,24 @@ class TablesDao {
     return data;
   }
 
-  Future<int> addTable(String name) async {
+  Future<int> addTable(String name, {int? waiterId}) async {
     final db = await AppDb.I.db;
     return db.insert('dining_tables', {
       'name': name.trim().isEmpty ? 'Tavolina' : name.trim(),
+      'waiter_id': waiterId,
       'is_active': 1,
       'created_at': DateTime.now().millisecondsSinceEpoch,
     });
+  }
+
+  Future<void> assignTableToWaiter(int tableId, int waiterId) async {
+    final db = await AppDb.I.db;
+    await db.update(
+      'dining_tables',
+      {'waiter_id': waiterId},
+      where: 'id=?',
+      whereArgs: [tableId],
+    );
   }
 
   Future<void> seedDefaultTables() async {
@@ -119,5 +159,14 @@ class TablesDao {
         );
       }
     }
+  }
+
+  Future<int> countTablesByWaiter(int waiterId) async {
+    final db = await AppDb.I.db;
+    final rows = await db.rawQuery(
+      'SELECT COUNT(*) AS c FROM dining_tables WHERE waiter_id = ? AND is_active = 1',
+      [waiterId],
+    );
+    return (rows.first['c'] as int?) ?? 0;
   }
 }

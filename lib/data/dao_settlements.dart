@@ -47,7 +47,7 @@ class SettlementsDao {
     required int settledBy,
   }) async {
     final db = await AppDb.I.db;
-    final id = await db.insert('settlements', {
+    return db.insert('settlements', {
       'waiter_id': waiterId,
       'total_cents': totalCents,
       'cash_cents': cashCents,
@@ -60,8 +60,6 @@ class SettlementsDao {
       'settled_by': settledBy,
       'settled_at': DateTime.now().millisecondsSinceEpoch,
     });
-
-    return id;
   }
 
   Future<List<SettlementRow>> listByWaiter(int waiterId) async {
@@ -89,5 +87,102 @@ class SettlementsDao {
         settledAt: r['settled_at'] as int,
       );
     }).toList();
+  }
+
+  /// ✅ totals for paid orders not yet settled
+  Future<Map<String, int>> getUnsettledTotals({
+    required int waiterId,
+    required int startMs,
+    required int endMs,
+  }) async {
+    final db = await AppDb.I.db;
+
+    // LEFT JOIN so old payments without order_id don't nuke result set
+    // If payment missing, we still count order total into total,
+    // and classify method as 'cash' by default (safe fallback).
+    final rows = await db.rawQuery(
+      '''
+SELECT 
+  o.total_cents AS total_cents,
+  COALESCE(p.method, 'cash') AS method
+FROM orders o
+LEFT JOIN payments p ON p.order_id = o.id
+WHERE o.waiter_id = ?
+  AND o.status = 'paid'
+  AND o.closed_at IS NOT NULL
+  AND o.closed_at >= ?
+  AND o.closed_at < ?
+  AND (o.settled_id IS NULL OR o.settled_id = 0)
+''',
+      [waiterId, startMs, endMs],
+    );
+
+    int total = 0;
+    int cash = 0;
+    int card = 0;
+
+    for (final row in rows) {
+      final orderTotal = (row['total_cents'] as int?) ?? 0;
+      final method = (row['method'] as String?)?.toLowerCase() ?? 'cash';
+
+      total += orderTotal;
+
+      if (method == 'card') {
+        card += orderTotal;
+      } else if (method == 'mixed') {
+        // mixed: for now count all in cash? (or split later)
+        // safest: treat as cash expected by default
+        cash += orderTotal;
+      } else {
+        cash += orderTotal;
+      }
+    }
+
+    return {'total': total, 'cash': cash, 'card': card, 'expectedCash': cash};
+  }
+
+  Future<void> settleWaiter({
+    required int waiterId,
+    required int startMs,
+    required int endMs,
+    required int totalCents,
+    required int cashCents,
+    required int cardCents,
+    required int expectedCashCents,
+    required int actualCashCents,
+    String? notes,
+    required int settledBy,
+  }) async {
+    final db = await AppDb.I.db;
+
+    final settlementId = await db.insert('settlements', {
+      'waiter_id': waiterId,
+      'total_cents': totalCents,
+      'cash_cents': cashCents,
+      'card_cents': cardCents,
+      'expected_cash_cents': expectedCashCents,
+      'difference_cents': actualCashCents - expectedCashCents,
+      'start_ms': startMs,
+      'end_ms': endMs,
+      'notes': notes,
+      'settled_by': settledBy,
+      'settled_at': DateTime.now().millisecondsSinceEpoch,
+    });
+
+    await db.update(
+      'orders',
+      {'settled_id': settlementId},
+      where:
+          'waiter_id = ? AND status = ? AND closed_at >= ? AND closed_at < ? AND (settled_id IS NULL OR settled_id = 0)',
+      whereArgs: [waiterId, 'paid', startMs, endMs],
+    );
+
+    // Reset DaySum by setting shift_started_at to null or current time
+    await db.update(
+      'users',
+      {'shift_started_at': DateTime.now().millisecondsSinceEpoch},
+      where: 'id = ?',
+      whereArgs: [waiterId],
+    );
   }
 }

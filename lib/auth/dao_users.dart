@@ -103,6 +103,11 @@ class UsersDao {
     );
   }
 
+  Future<void> deleteUser(int id) async {
+    final db = await AppDb.I.db;
+    await db.delete('users', where: 'id=?', whereArgs: [id]);
+  }
+
   Future<void> setActive(int id, bool active) async {
     final db = await AppDb.I.db;
     await db.update(

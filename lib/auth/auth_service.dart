@@ -46,54 +46,48 @@ class AuthService {
   }
 
   Future<AuthUser?> login(String password) async {
-    // Predefined passwords
-    const adminPasswords = ['1234'];
-    const waiterPasswords = ['1111'];
+    final db = await AppDb.I.db;
 
-    UserRole? role;
-    String username;
-    String? fullName;
-
-    if (adminPasswords.contains(password)) {
-      role = UserRole.admin;
-      username = 'admin';
-      fullName = 'Administrator';
-    } else if (waiterPasswords.contains(password)) {
-      role = UserRole.waiter;
-      username = 'waiter_${waiterPasswords.indexOf(password) + 1}';
-      fullName = 'Waiter ${waiterPasswords.indexOf(password) + 1}';
-    } else {
-      return null; // Invalid password
+    // First check predefined pins for admin
+    if (password == '1234') {
+      // Find active admin user
+      final adminRows = await db.query(
+        'users',
+        where: 'role=? AND is_active=1',
+        whereArgs: ['admin'],
+        limit: 1,
+      );
+      if (adminRows.isNotEmpty) {
+        final row = adminRows.first;
+        return AuthUser(
+          id: row['id'] as int,
+          username: row['username'] as String,
+          role: UserRole.admin,
+          fullName: row['full_name'] as String?,
+        );
+      }
     }
 
-    // Check if user exists in DB, if not create
-    final db = await AppDb.I.db;
+    // Check existing users with matching password hash and active
+    final hash = _hash(password);
     final rows = await db.query(
       'users',
-      where: 'username=?',
-      whereArgs: [username],
+      where: 'pass_hash=? AND is_active=1',
+      whereArgs: [hash],
       limit: 1,
     );
-    int userId;
-    if (rows.isEmpty) {
-      userId = await db.insert('users', {
-        'username': username,
-        'pass_hash': _hash(password),
-        'role': roleToString(role),
-        'full_name': fullName,
-        'is_active': 1,
-        'created_at': DateTime.now().millisecondsSinceEpoch,
-      });
-    } else {
-      userId = rows.first['id'] as int;
+
+    if (rows.isNotEmpty) {
+      final row = rows.first;
+      return AuthUser(
+        id: row['id'] as int,
+        username: row['username'] as String,
+        role: roleFromString(row['role'] as String),
+        fullName: row['full_name'] as String?,
+      );
     }
 
-    return AuthUser(
-      id: userId,
-      username: username,
-      role: role,
-      fullName: fullName,
-    );
+    return null; // No matching active user found
   }
 
   // ✅ përdoret nga Users CRUD

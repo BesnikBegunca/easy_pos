@@ -1,10 +1,10 @@
-import 'db.dart';
-
 import 'package:sqflite_common/sqlite_api.dart';
+import 'db.dart';
 
 class PaymentRow {
   final int id;
   final int tableId;
+  final int? orderId;
   final int totalCents;
   final String method; // cash/card/mixed
   final int paidAt;
@@ -13,6 +13,7 @@ class PaymentRow {
   PaymentRow({
     required this.id,
     required this.tableId,
+    required this.orderId,
     required this.totalCents,
     required this.method,
     required this.paidAt,
@@ -24,114 +25,104 @@ class PaymentsDao {
   PaymentsDao._();
   static final PaymentsDao I = PaymentsDao._();
 
-  /// ✅ Create payment using existing DB executor (txn or db)
+  /// ✅ Insert payment (supports transactions via [ex])
   Future<int> createPayment({
-    required DatabaseExecutor ex,
+    DatabaseExecutor? ex,
     required int tableId,
+    required int orderId,
     required int totalCents,
     required String method, // cash/card/mixed
     required int paidBy,
   }) async {
-    return ex.insert('payments', {
+    final db = ex ?? await AppDb.I.db;
+
+    final m = method.trim().toLowerCase();
+    final safeMethod = (m == 'cash' || m == 'card' || m == 'mixed')
+        ? m
+        : 'cash';
+
+    return db.insert('payments', {
       'table_id': tableId,
+      'order_id': orderId, // ✅ THIS FIXES SETTLEMENT JOIN
       'total_cents': totalCents,
-      'method': method,
+      'method': safeMethod,
       'paid_at': DateTime.now().millisecondsSinceEpoch,
       'paid_by': paidBy,
     });
   }
 
-  Future<int> sumCashPayments(DateTime date) async {
-    final db = await AppDb.I.db;
-    final startOfDay = DateTime(
-      date.year,
-      date.month,
-      date.day,
-    ).millisecondsSinceEpoch;
-    final endOfDay = DateTime(
-      date.year,
-      date.month,
-      date.day,
-      23,
-      59,
-      59,
-      999,
-    ).millisecondsSinceEpoch;
-
-    final result = await db.rawQuery(
-      '''
-      SELECT SUM(total_cents) as total
-      FROM payments
-      WHERE method = 'cash' AND paid_at >= ? AND paid_at <= ?
-    ''',
-      [startOfDay, endOfDay],
-    );
-
-    return (result.first['total'] as int?) ?? 0;
+  /// Helpers to compute day range
+  int _dayStartMs(DateTime d) {
+    final s = DateTime(d.year, d.month, d.day);
+    return s.millisecondsSinceEpoch;
   }
 
-  Future<int> sumCardPayments(DateTime date) async {
-    final db = await AppDb.I.db;
-    final startOfDay = DateTime(
-      date.year,
-      date.month,
-      date.day,
-    ).millisecondsSinceEpoch;
-    final endOfDay = DateTime(
-      date.year,
-      date.month,
-      date.day,
-      23,
-      59,
-      59,
-      999,
-    ).millisecondsSinceEpoch;
-
-    final result = await db.rawQuery(
-      '''
-      SELECT SUM(total_cents) as total
-      FROM payments
-      WHERE method = 'card' AND paid_at >= ? AND paid_at <= ?
-    ''',
-      [startOfDay, endOfDay],
-    );
-
-    return (result.first['total'] as int?) ?? 0;
+  int _dayEndMs(DateTime d) {
+    final e = DateTime(d.year, d.month, d.day, 23, 59, 59, 999);
+    return e.millisecondsSinceEpoch;
   }
 
-  Future<int> sumCashPaymentsByWaiter({
-    required int waiterId,
+  /// ✅ Sum of CASH payments for a given day
+  Future<int> sumCashPayments(DateTime day) async {
+    return sumByMethodInRange(
+      startMs: _dayStartMs(day),
+      endMs: _dayEndMs(day),
+      method: 'cash',
+    );
+  }
+
+  /// ✅ Sum of CARD payments for a given day
+  Future<int> sumCardPayments(DateTime day) async {
+    return sumByMethodInRange(
+      startMs: _dayStartMs(day),
+      endMs: _dayEndMs(day),
+      method: 'card',
+    );
+  }
+
+  /// ✅ Generic sum by method in range
+  /// Note: mixed is NOT included unless you call with method='mixed'
+  Future<int> sumByMethodInRange({
     required int startMs,
     required int endMs,
+    required String method, // cash/card/mixed
   }) async {
     final db = await AppDb.I.db;
-    final result = await db.rawQuery(
+    final m = method.trim().toLowerCase();
+
+    final rows = await db.rawQuery(
       '''
-      SELECT SUM(total_cents) as total
-      FROM payments
-      WHERE method = 'cash' AND paid_at >= ? AND paid_at <= ? AND paid_by = ?
-    ''',
-      [startMs, endMs, waiterId],
+SELECT COALESCE(SUM(total_cents),0) AS s
+FROM payments
+WHERE method = ?
+  AND paid_at >= ?
+  AND paid_at <= ?
+''',
+      [m, startMs, endMs],
     );
 
-    return (result.first['total'] as int?) ?? 0;
+    return (rows.first['s'] as int?) ?? 0;
   }
 
-  Future<int> sumCardPaymentsByWaiter({
-    required int waiterId,
-    required int startMs,
-    required int endMs,
-  }) async {
+  /// ✅ Recent payments list
+  Future<List<PaymentRow>> listRecent({int limit = 50}) async {
     final db = await AppDb.I.db;
-    final result = await db.rawQuery(
-      '''
-      SELECT SUM(total_cents) as total
-      FROM payments
-      WHERE method = 'card' AND paid_at >= ? AND paid_at <= ? AND paid_by = ?
-    ''',
-      [startMs, endMs, waiterId],
+    final rows = await db.query(
+      'payments',
+      orderBy: 'paid_at DESC',
+      limit: limit,
     );
 
-    return (result.first['total'] as int?) ?? 0;
+    return rows.map((r) {
+      return PaymentRow(
+        id: r['id'] as int,
+        tableId: r['table_id'] as int,
+        orderId: r['order_id'] as int?,
+        totalCents: r['total_cents'] as int,
+        method: (r['method'] as String?) ?? 'cash',
+        paidAt: r['paid_at'] as int,
+        paidBy: r['paid_by'] as int,
+      );
+    }).toList();
   }
 }

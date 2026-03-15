@@ -37,7 +37,6 @@ class _OrderScreenState extends State<OrderScreen> {
   List<ProductRow> products = [];
   List<OrderLine> lines = [];
 
-  /// Items qe ende s’jan commit ne DB (dhe zakonisht s’jan printu ende).
   /// productId -> { name, qty, unitPriceCents }
   final Map<int, Map<String, dynamic>> pendingItems = {};
 
@@ -103,6 +102,7 @@ class _OrderScreenState extends State<OrderScreen> {
       categoryId: selectedCategoryId,
       search: searchC.text,
     );
+
     if (!mounted) return;
     setState(() {});
   }
@@ -137,13 +137,13 @@ class _OrderScreenState extends State<OrderScreen> {
         };
       }
     });
-    _refreshCart(); // ✅ me u update total-i menjehere
+
+    _refreshCart();
   }
 
   Future<void> _checkout() async {
     if (totalCents <= 0) return;
 
-    // ✅ kombinim DB lines + pending items per me i pa krejt ne checkout
     final combined = <Map<String, dynamic>>[];
 
     for (final l in lines) {
@@ -153,6 +153,7 @@ class _OrderScreenState extends State<OrderScreen> {
         'unitPriceCents': l.unitPriceCents,
       });
     }
+
     for (final entry in pendingItems.entries) {
       final item = entry.value;
       combined.add({
@@ -164,60 +165,115 @@ class _OrderScreenState extends State<OrderScreen> {
 
     final paymentMethod = await showDialog<String>(
       context: context,
-      builder: (_) => AppCard(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Checkout ${widget.tableName}', style: AppTheme.titleMedium),
-            const SizedBox(height: AppTheme.spaceL),
-            const Text('Items:', style: TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: AppTheme.spaceS),
-            SizedBox(
-              height: 140,
-              child: ListView(
-                children: [
-                  for (final it in combined)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Row(
-                        children: [
-                          Expanded(child: Text('${it['qty']}x ${it['name']}')),
-                          Text(
-                            moneyFromCents(
-                              (it['qty'] as int) *
-                                  (it['unitPriceCents'] as int),
-                            ),
+      barrierDismissible: true,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        child: AppCard(
+          padding: const EdgeInsets.all(AppTheme.spaceL),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Checkout ${widget.tableName}',
+                  style: AppTheme.titleMedium,
+                ),
+                const SizedBox(height: AppTheme.spaceL),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Items:',
+                    style: AppTheme.bodyMedium.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppTheme.spaceS),
+                Container(
+                  height: 180,
+                  decoration: BoxDecoration(
+                    color: AppTheme.surface,
+                    borderRadius: AppTheme.borderRadius,
+                    border: Border.all(color: AppTheme.borderColor),
+                  ),
+                  child: ListView(
+                    padding: const EdgeInsets.all(12),
+                    children: [
+                      for (final it in combined)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  '${it['qty']}x ${it['name']}',
+                                  style: AppTheme.bodyMedium,
+                                ),
+                              ),
+                              Text(
+                                moneyFromCents(
+                                  (it['qty'] as int) *
+                                      (it['unitPriceCents'] as int),
+                                ),
+                                style: AppTheme.bodyMedium.copyWith(
+                                  color: AppTheme.primary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppTheme.spaceM),
+                Divider(color: Colors.white.withOpacity(0.08)),
+                const SizedBox(height: AppTheme.spaceS),
+                Row(
+                  children: [
+                    Text(
+                      'Totali',
+                      style: AppTheme.bodyLarge.copyWith(
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                ],
-              ),
-            ),
-            const Divider(),
-            Text(
-              'Total: ${moneyFromCents(totalCents)}',
-              style: AppTheme.bodyLarge,
-            ),
-            const SizedBox(height: AppTheme.spaceL),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                AppPrimaryButton(
-                  label: 'Cash',
-                  onPressed: () => Navigator.pop(context, 'cash'),
+                    const Spacer(),
+                    Text(
+                      moneyFromCents(totalCents),
+                      style: AppTheme.titleSmall.copyWith(
+                        color: AppTheme.primary,
+                      ),
+                    ),
+                  ],
                 ),
-                AppPrimaryButton(
-                  label: 'Card',
-                  onPressed: () => Navigator.pop(context, 'card'),
-                ),
-                AppPrimaryButton(
-                  label: 'Mixed',
-                  onPressed: () => Navigator.pop(context, 'mixed'),
+                const SizedBox(height: AppTheme.spaceL),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  alignment: WrapAlignment.center,
+                  children: [
+                    AppPrimaryButton(
+                      label: 'Cash',
+                      icon: Icons.payments_outlined,
+                      onPressed: () => Navigator.pop(context, 'cash'),
+                    ),
+                    AppPrimaryButton(
+                      label: 'Card',
+                      icon: Icons.credit_card,
+                      onPressed: () => Navigator.pop(context, 'card'),
+                    ),
+                    AppPrimaryButton(
+                      label: 'Mixed',
+                      icon: Icons.account_balance_wallet_outlined,
+                      onPressed: () => Navigator.pop(context, 'mixed'),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -243,7 +299,6 @@ class _OrderScreenState extends State<OrderScreen> {
     }
 
     try {
-      // Commit pending items to DB
       for (final entry in pendingItems.entries) {
         final productId = entry.key;
         final item = entry.value;
@@ -259,14 +314,12 @@ class _OrderScreenState extends State<OrderScreen> {
         }
       }
 
-      // Clear pending + refresh
       if (!mounted) return;
       setState(() => pendingItems.clear());
       await _refreshCart();
 
-      // ✅ Pa popup fare + kthehu te Tables screen
       if (!mounted) return;
-      Navigator.pop(context, true); // true => me bo refresh te Tables screen
+      Navigator.pop(context, true);
     } catch (e) {
       debugPrint('Print/commit error: $e');
       if (!mounted) return;
@@ -274,6 +327,28 @@ class _OrderScreenState extends State<OrderScreen> {
         context,
       ).showSnackBar(SnackBar(content: Text("Gabim në print: $e")));
     }
+  }
+
+  void _increasePendingQty(int productId) {
+    setState(() {
+      pendingItems[productId]!['qty'] =
+          (pendingItems[productId]!['qty'] as int) + 1;
+    });
+    _refreshCart();
+  }
+
+  void _decreasePendingQty(int productId) {
+    final qty = pendingItems[productId]!['qty'] as int;
+
+    setState(() {
+      if (qty > 1) {
+        pendingItems[productId]!['qty'] = qty - 1;
+      } else {
+        pendingItems.remove(productId);
+      }
+    });
+
+    _refreshCart();
   }
 
   @override
@@ -309,6 +384,7 @@ class _OrderScreenState extends State<OrderScreen> {
               const SizedBox(height: 24),
               AppPrimaryButton(
                 label: 'Kthehu',
+                icon: Icons.arrow_back,
                 onPressed: () => Navigator.pop(context),
               ),
             ],
@@ -317,19 +393,22 @@ class _OrderScreenState extends State<OrderScreen> {
       );
     }
 
-    final canPrint = pendingItems.isNotEmpty; // ✅ ky eshte kriteri i printit
+    final canPrint = pendingItems.isNotEmpty;
 
     return AppScaffold(
       topBar: AppTopBar(
         title: widget.tableName,
         actions: [
-          TopChip(
-            icon: Icons.payments,
-            label: 'PAGUAJ (${moneyFromCents(totalCents)})',
-            onTap: totalCents <= 0 ? () {} : () => _checkout(),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: TopChip(
+              icon: Icons.payments,
+              label: 'PAGUAJ (${moneyFromCents(totalCents)})',
+              onTap: totalCents <= 0 ? () {} : _checkout,
+            ),
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8),
             child: ElevatedButton(
               onPressed: canPrint ? _onPrintPressed : null,
               style: ElevatedButton.styleFrom(
@@ -337,9 +416,10 @@ class _OrderScreenState extends State<OrderScreen> {
                     ? AppTheme.success
                     : AppTheme.success.withOpacity(0.45),
                 foregroundColor: Colors.white,
-                fixedSize: const Size(120, 48),
+                fixedSize: const Size(120, 44),
+                elevation: 0,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(10),
                 ),
               ),
               child: const Text(
@@ -352,30 +432,28 @@ class _OrderScreenState extends State<OrderScreen> {
       ),
       body: Row(
         children: [
-          // ✅ SIDEBAR KATEGORI
           Container(
             width: 240,
             decoration: BoxDecoration(
+              color: AppTheme.surface,
               border: Border(
-                right: BorderSide(color: Colors.grey.withOpacity(0.2)),
+                right: BorderSide(color: Colors.white.withOpacity(0.08)),
               ),
             ),
             child: Column(
               children: [
-                const SizedBox(height: 10),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 12),
+                const SizedBox(height: 12),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Align(
                     alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Kategoritë',
-                      style: TextStyle(fontWeight: FontWeight.w900),
-                    ),
+                    child: Text('Kategoritë', style: AppTheme.titleSmall),
                   ),
                 ),
                 const SizedBox(height: 8),
                 Expanded(
                   child: ListView(
+                    padding: const EdgeInsets.only(bottom: 10),
                     children: [
                       for (final c in categories)
                         _catItem(
@@ -393,7 +471,6 @@ class _OrderScreenState extends State<OrderScreen> {
             ),
           ),
 
-          // ✅ MAIN: SEARCH + GRID PRODUKTE
           Expanded(
             flex: 3,
             child: Padding(
@@ -403,73 +480,50 @@ class _OrderScreenState extends State<OrderScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: TextField(
+                        child: AppTextField(
                           controller: searchC,
-                          decoration: const InputDecoration(
-                            prefixIcon: Icon(Icons.search),
-                            labelText: 'Kërko produkt…',
-                          ),
-                          onChanged: (_) => _reloadProducts(),
+                          label: 'Kërko produkt…',
+                          prefixIcon: Icons.search,
                         ),
                       ),
                       const SizedBox(width: 12),
-                      IconButton(
-                        tooltip: 'Refresh',
-                        onPressed: () async {
-                          searchC.clear();
-                          await _reloadProducts();
-                        },
-                        icon: const Icon(Icons.refresh),
+                      Material(
+                        color: AppTheme.tile,
+                        borderRadius: BorderRadius.circular(12),
+                        child: IconButton(
+                          tooltip: 'Refresh',
+                          onPressed: () async {
+                            searchC.clear();
+                            await _reloadProducts();
+                          },
+                          icon: const Icon(Icons.refresh),
+                          color: AppTheme.primary,
+                        ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 12),
                   Expanded(
                     child: products.isEmpty
-                        ? const Center(
-                            child: Text('S’ka produkte në këtë kategori.'),
+                        ? Center(
+                            child: Text(
+                              'S’ka produkte në këtë kategori.',
+                              style: AppTheme.bodyMedium,
+                            ),
                           )
-                        : GridView.count(
-                            crossAxisCount: 4,
-                            crossAxisSpacing: 10,
-                            mainAxisSpacing: 10,
-                            children: [
-                              for (final p in products)
-                                InkWell(
-                                  onTap: () => _addToPending(p),
-                                  child: Card(
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(12),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          const Icon(
-                                            Icons.local_cafe,
-                                            size: 22,
-                                          ),
-                                          const Spacer(),
-                                          Text(
-                                            p.name,
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w900,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 6),
-                                          Text(
-                                            moneyFromCents(p.priceCents),
-                                            style: const TextStyle(
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
+                        : GridView.builder(
+                            itemCount: products.length,
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 4,
+                                  crossAxisSpacing: 10,
+                                  mainAxisSpacing: 10,
+                                  childAspectRatio: 1.1,
                                 ),
-                            ],
+                            itemBuilder: (_, i) {
+                              final p = products[i];
+                              return _productCard(p);
+                            },
                           ),
                   ),
                 ],
@@ -477,163 +531,233 @@ class _OrderScreenState extends State<OrderScreen> {
             ),
           ),
 
-          // ✅ CART
           Expanded(
             flex: 2,
             child: Padding(
               padding: const EdgeInsets.all(12),
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Shporta',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Expanded(
-                        child: (lines.isEmpty && pendingItems.isEmpty)
-                            ? const Center(child: Text('Shto produkte…'))
-                            : ListView.separated(
-                                itemCount: lines.length + pendingItems.length,
-                                separatorBuilder: (_, __) =>
-                                    const Divider(height: 1),
-                                itemBuilder: (_, i) {
-                                  if (i < lines.length) {
-                                    final l = lines[i];
-                                    return ListTile(
-                                      title: Text(
-                                        l.name,
-                                        style: const TextStyle(
-                                          color: Colors.grey,
-                                        ),
-                                      ),
-                                      subtitle: Text(
-                                        '${moneyFromCents(l.unitPriceCents)} x ${l.qty}',
-                                        style: const TextStyle(
-                                          color: Colors.grey,
-                                        ),
-                                      ),
-                                      trailing: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          IconButton(
-                                            onPressed: null,
-                                            icon: const Icon(
-                                              Icons.remove_circle_outline,
-                                              color: Colors.grey,
-                                            ),
-                                          ),
-                                          Text(
-                                            '${l.qty}',
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w900,
-                                              color: Colors.grey,
-                                            ),
-                                          ),
-                                          IconButton(
-                                            onPressed: null,
-                                            icon: const Icon(
-                                              Icons.add_circle_outline,
-                                              color: Colors.grey,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  } else {
-                                    final pendingIndex = i - lines.length;
-                                    final productId = pendingItems.keys
-                                        .elementAt(pendingIndex);
-                                    final item = pendingItems[productId]!;
-                                    final name = item['name'] as String;
-                                    final qty = item['qty'] as int;
-                                    final unitPriceCents =
-                                        item['unitPriceCents'] as int;
-
-                                    return ListTile(
-                                      title: Text('$name (Pending)'),
-                                      subtitle: Text(
-                                        '${moneyFromCents(unitPriceCents)} x $qty',
-                                      ),
-                                      trailing: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          IconButton(
-                                            onPressed: () {
-                                              setState(() {
-                                                if (qty > 1) {
-                                                  pendingItems[productId]!['qty'] =
-                                                      qty - 1;
-                                                } else {
-                                                  pendingItems.remove(
-                                                    productId,
-                                                  );
-                                                }
-                                              });
-                                              _refreshCart();
-                                            },
-                                            icon: const Icon(
-                                              Icons.remove_circle_outline,
-                                            ),
-                                          ),
-                                          Text(
-                                            '$qty',
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w900,
-                                            ),
-                                          ),
-                                          IconButton(
-                                            onPressed: () {
-                                              setState(() {
-                                                pendingItems[productId]!['qty'] =
-                                                    qty + 1;
-                                              });
-                                              _refreshCart();
-                                            },
-                                            icon: const Icon(
-                                              Icons.add_circle_outline,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  }
-                                },
-                              ),
-                      ),
-                      const Divider(height: 1),
-                      Padding(
-                        padding: const EdgeInsets.all(10),
-                        child: Row(
-                          children: [
-                            const Text(
-                              'Totali:',
-                              style: TextStyle(fontWeight: FontWeight.w900),
-                            ),
-                            const Spacer(),
-                            Text(
-                              moneyFromCents(totalCents),
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ],
-                        ),
+              child: Material(
+                color: AppTheme.tile,
+                borderRadius: AppTheme.borderRadius,
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: AppTheme.borderRadius,
+                    border: Border.all(color: AppTheme.borderColor),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.25),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
                       ),
                     ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Shporta', style: AppTheme.titleSmall),
+                        const SizedBox(height: 10),
+                        Expanded(
+                          child: (lines.isEmpty && pendingItems.isEmpty)
+                              ? Center(
+                                  child: Text(
+                                    'Shto produkte…',
+                                    style: AppTheme.bodyMedium,
+                                  ),
+                                )
+                              : ListView.separated(
+                                  itemCount: lines.length + pendingItems.length,
+                                  separatorBuilder: (_, __) => Divider(
+                                    height: 1,
+                                    color: Colors.white.withOpacity(0.08),
+                                  ),
+                                  itemBuilder: (_, i) {
+                                    if (i < lines.length) {
+                                      final l = lines[i];
+                                      return ListTile(
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              horizontal: 6,
+                                              vertical: 2,
+                                            ),
+                                        title: Text(
+                                          l.name,
+                                          style: AppTheme.bodyMedium.copyWith(
+                                            color: Colors.grey.shade400,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        subtitle: Text(
+                                          '${moneyFromCents(l.unitPriceCents)} x ${l.qty}',
+                                          style: AppTheme.bodySmall.copyWith(
+                                            color: Colors.grey.shade500,
+                                          ),
+                                        ),
+                                        trailing: Text(
+                                          moneyFromCents(
+                                            l.unitPriceCents * l.qty,
+                                          ),
+                                          style: AppTheme.bodyMedium.copyWith(
+                                            color: Colors.grey.shade400,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      );
+                                    } else {
+                                      final pendingIndex = i - lines.length;
+                                      final productId = pendingItems.keys
+                                          .elementAt(pendingIndex);
+                                      final item = pendingItems[productId]!;
+                                      final name = item['name'] as String;
+                                      final qty = item['qty'] as int;
+                                      final unitPriceCents =
+                                          item['unitPriceCents'] as int;
+
+                                      return ListTile(
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              horizontal: 6,
+                                              vertical: 2,
+                                            ),
+                                        title: Text(
+                                          '$name (Pending)',
+                                          style: AppTheme.bodyMedium.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        subtitle: Text(
+                                          '${moneyFromCents(unitPriceCents)} x $qty',
+                                          style: AppTheme.bodySmall,
+                                        ),
+                                        trailing: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Material(
+                                              color: Colors.transparent,
+                                              child: IconButton(
+                                                onPressed: () =>
+                                                    _decreasePendingQty(
+                                                      productId,
+                                                    ),
+                                                icon: const Icon(
+                                                  Icons.remove_circle_outline,
+                                                ),
+                                                color: AppTheme.primary,
+                                              ),
+                                            ),
+                                            Text(
+                                              '$qty',
+                                              style: AppTheme.bodyMedium
+                                                  .copyWith(
+                                                    fontWeight: FontWeight.w800,
+                                                  ),
+                                            ),
+                                            Material(
+                                              color: Colors.transparent,
+                                              child: IconButton(
+                                                onPressed: () =>
+                                                    _increasePendingQty(
+                                                      productId,
+                                                    ),
+                                                icon: const Icon(
+                                                  Icons.add_circle_outline,
+                                                ),
+                                                color: AppTheme.primary,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }
+                                  },
+                                ),
+                        ),
+                        Divider(
+                          height: 1,
+                          color: Colors.white.withOpacity(0.08),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.all(10),
+                          child: Row(
+                            children: [
+                              Text(
+                                'Totali:',
+                                style: AppTheme.bodyLarge.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const Spacer(),
+                              Text(
+                                moneyFromCents(totalCents),
+                                style: AppTheme.titleSmall.copyWith(
+                                  color: AppTheme.primary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _productCard(ProductRow p) {
+    return Material(
+      color: AppTheme.tile,
+      borderRadius: AppTheme.borderRadius,
+      child: InkWell(
+        borderRadius: AppTheme.borderRadius,
+        onTap: () => _addToPending(p),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            borderRadius: AppTheme.borderRadius,
+            border: Border.all(color: AppTheme.borderColor),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [AppTheme.tile, AppTheme.surface],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.22),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.local_cafe, size: 22, color: AppTheme.primary),
+              const Spacer(),
+              Text(
+                p.name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTheme.bodyMedium.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                moneyFromCents(p.priceCents),
+                style: AppTheme.bodySmall.copyWith(
+                  color: AppTheme.primary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -645,32 +769,43 @@ class _OrderScreenState extends State<OrderScreen> {
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      child: InkWell(
-        onTap: onTap,
+      child: Material(
+        color: selected
+            ? AppTheme.primary.withOpacity(0.12)
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            color: selected
-                ? Colors.black.withOpacity(0.08)
-                : Colors.transparent,
-            border: Border.all(color: Colors.grey.withOpacity(0.2)),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                selected ? Icons.check_circle : Icons.circle_outlined,
-                size: 18,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: selected
+                    ? AppTheme.primary.withOpacity(0.45)
+                    : Colors.white.withOpacity(0.10),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  selected ? Icons.check_circle : Icons.circle_outlined,
+                  size: 18,
+                  color: selected ? AppTheme.primary : Colors.white70,
                 ),
-              ),
-            ],
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: AppTheme.bodyMedium.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: selected ? AppTheme.primary : AppTheme.textPrimary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

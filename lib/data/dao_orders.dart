@@ -1,5 +1,4 @@
 import 'package:sqflite_common/sqlite_api.dart';
-
 import 'db.dart';
 import 'dao_payments.dart';
 
@@ -27,30 +26,25 @@ class OrdersDao {
   OrdersDao._();
   static final OrdersDao I = OrdersDao._();
 
-  /// ✅ Returns open order id for this table, creates it if missing.
-  /// Also ensures the table exists and marks it 'open' when order is created.
   Future<int> getOrCreateOpenOrder({
     required int tableId,
     required int waiterId,
   }) async {
     final db = await AppDb.I.db;
 
-    // ✅ If open order exists return it
     final existing = await db.query(
       'orders',
       where: 'table_id=? AND status=?',
       whereArgs: [tableId, 'open'],
       limit: 1,
     );
-
     if (existing.isNotEmpty) return existing.first['id'] as int;
 
-    // ✅ Mark table status open and create order atomically inside a transaction
     try {
       return await db.transaction((txn) async {
         final updated = await txn.update(
           'dining_tables',
-          {'status': 'open'},
+          {'status': 'open', 'waiter_id': waiterId},
           where: 'id=?',
           whereArgs: [tableId],
         );
@@ -58,7 +52,6 @@ class OrdersDao {
           throw Exception('Table not found or inactive: $tableId');
         }
 
-        // Validate waiter exists to produce clearer errors for foreign key issues
         final waiterRows = await txn.query(
           'users',
           where: 'id=?',
@@ -75,24 +68,23 @@ class OrdersDao {
           'status': 'open',
           'total_cents': 0,
           'created_at': DateTime.now().millisecondsSinceEpoch,
+          'closed_at': null,
+          'settled_id': null,
         });
 
         return id;
       });
     } catch (e, st) {
-      // Log full error for debugging and rethrow so callers can handle it
       print('Error creating/opening order for table $tableId: $e\n$st');
       rethrow;
     }
   }
 
-  /// ✅ Order lines (cart)
   Future<List<OrderLine>> getOrderLines(int orderId) async {
     final db = await AppDb.I.db;
-
     final rows = await db.rawQuery(
       '''
-SELECT
+SELECT 
   oi.id AS item_id,
   oi.product_id,
   p.name AS product_name,
@@ -123,7 +115,6 @@ ORDER BY oi.id DESC
         .toList();
   }
 
-  /// ✅ Total from items (source of truth)
   Future<int> getOrderTotalCents(int orderId) async {
     final db = await AppDb.I.db;
     final rows = await db.rawQuery(
@@ -133,14 +124,12 @@ ORDER BY oi.id DESC
     return (rows.first['s'] as int?) ?? 0;
   }
 
-  /// ✅ Add product to order (qty increments if exists)
   Future<void> addProductToOrder({
     required int orderId,
     required int productId,
     required int unitPriceCents,
   }) async {
     final db = await AppDb.I.db;
-
     final ex = await db.query(
       'order_items',
       where: 'order_id=? AND product_id=?',
@@ -155,7 +144,7 @@ ORDER BY oi.id DESC
         'qty': 1,
         'unit_price_cents': unitPriceCents,
         'line_total_cents': unitPriceCents,
-        'note': null, // ✅ requires note column (migrated)
+        'note': null,
       });
     } else {
       final id = ex.first['id'] as int;
@@ -174,7 +163,6 @@ ORDER BY oi.id DESC
     await _recalcOrderTotal(orderId);
   }
 
-  /// ✅ Change qty (0 -> delete)
   Future<void> changeQty({
     required int itemId,
     required int orderId,
@@ -208,7 +196,6 @@ ORDER BY oi.id DESC
     await _recalcOrderTotal(orderId);
   }
 
-  /// ✅ Update note text for an item
   Future<void> updateNote({required int itemId, required String? note}) async {
     final db = await AppDb.I.db;
     await db.update(
@@ -219,7 +206,6 @@ ORDER BY oi.id DESC
     );
   }
 
-  /// ✅ Checkout transaction: payment + close order + free table + sales row
   Future<void> checkout({
     required int orderId,
     required String paymentMethod, // cash/card/mixed
@@ -240,14 +226,13 @@ ORDER BY oi.id DESC
       final tableId = order['table_id'] as int;
       final waiterId = order['waiter_id'] as int;
 
-      // ✅ compute total inside txn
       final totalRows = await txn.rawQuery(
         'SELECT COALESCE(SUM(line_total_cents),0) AS s FROM order_items WHERE order_id=?',
         [orderId],
       );
       final total = (totalRows.first['s'] as int?) ?? 0;
 
-      // ✅ close order
+      // close order
       await txn.update(
         'orders',
         {
@@ -259,49 +244,40 @@ ORDER BY oi.id DESC
         whereArgs: [orderId],
       );
 
-      // ✅ create payment using txn executor
+      // ✅ payment with order_id
       await PaymentsDao.I.createPayment(
         ex: txn,
         tableId: tableId,
+        orderId: orderId,
         totalCents: total,
         method: paymentMethod,
         paidBy: paidBy,
       );
 
-      // ✅ sales row for dashboards
+      // ✅ sales row (ONLY ONCE)
       await txn.insert('sales', {
         'waiter_id': waiterId,
         'total_cents': total,
         'created_at': DateTime.now().millisecondsSinceEpoch,
       });
 
-      // ✅ table back to free
+      // free table
       await txn.update(
         'dining_tables',
-        {'status': 'free'},
+        {'status': 'free', 'waiter_id': null},
         where: 'id=?',
         whereArgs: [tableId],
       );
-
-      // ✅ sales row for dashboards
-      await txn.insert('sales', {
-        'waiter_id': waiterId,
-        'total_cents': total,
-        'created_at': DateTime.now().millisecondsSinceEpoch,
-      });
     });
   }
 
-  /// ✅ Recalculate order total and store in orders.total_cents
   Future<void> _recalcOrderTotal(int orderId) async {
     final db = await AppDb.I.db;
-
     final rows = await db.rawQuery(
       'SELECT COALESCE(SUM(line_total_cents),0) AS s FROM order_items WHERE order_id=?',
       [orderId],
     );
     final total = (rows.first['s'] as int?) ?? 0;
-
     await db.update(
       'orders',
       {'total_cents': total},
@@ -330,5 +306,24 @@ ORDER BY oi.id DESC
       [waiterId, startMs, endMs],
     );
     return (rows.first['c'] as int?) ?? 0;
+  }
+
+  Future<int> getDaySum(int waiterId, int startMs) async {
+    final db = await AppDb.I.db;
+    final rows = await db.rawQuery(
+      'SELECT COALESCE(SUM(oi.line_total_cents), 0) AS total FROM orders o JOIN order_items oi ON o.id = oi.order_id WHERE o.waiter_id = ? AND o.created_at >= ? AND oi.is_printed = 1',
+      [waiterId, startMs],
+    );
+    return (rows.first['total'] as int?) ?? 0;
+  }
+
+  Future<void> markItemsAsPrinted(int orderId) async {
+    final db = await AppDb.I.db;
+    await db.update(
+      'order_items',
+      {'is_printed': 1},
+      where: 'order_id = ?',
+      whereArgs: [orderId],
+    );
   }
 }

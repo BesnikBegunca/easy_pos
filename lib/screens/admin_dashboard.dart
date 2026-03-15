@@ -8,9 +8,11 @@ import '../data/dao_sales.dart';
 import '../data/dao_payments.dart';
 import '../data/dao_orders.dart';
 import '../data/dao_settlements.dart';
+import '../data/dao_tables.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_widgets.dart';
 import 'manage_users_screen.dart';
+import 'waiter_settlement_screen.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -150,15 +152,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ),
             const SizedBox(height: 12),
             FutureBuilder<int>(
-              future: SalesDao.I.sumTotalCents(
-                range: RangeKind.day,
-                anchor: DateTime.now(),
-                waiterId: u.id,
+              future: OrdersDao.I.getDaySum(
+                u.id,
+                u.shiftStartedAt ?? DateTime.now().millisecondsSinceEpoch,
               ),
               builder: (context, snap) {
-                final total = snap.data ?? 0;
+                final daySum = snap.data ?? 0;
                 return Text(
-                  'Total: ${moneyFromCents(total)}',
+                  'DaySum: ${moneyFromCents(daySum)}',
                   style: AppTheme.bodyMedium.copyWith(color: textColor),
                 );
               },
@@ -225,34 +226,28 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   Future<void> _settleDialog(AppUserRow u) async {
-    // compute totals for selected period
-    final start = _startMs();
-    final end = _endMs();
+    // compute totals for waiter's shift
+    final start = u.shiftStartedAt ?? _startMs();
+    final end = DateTime.now().millisecondsSinceEpoch;
 
-    final total = await SalesDao.I.sumTotalCents(
-      range: RangeKind.day,
-      anchor: DateTime.now(),
-      waiterId: u.id,
-    );
-    final cash = await PaymentsDao.I.sumCashPaymentsByWaiter(
+    final totals = await SettlementsDao.I.getUnsettledTotals(
       waiterId: u.id,
       startMs: start,
       endMs: end,
     );
-    final card = await PaymentsDao.I.sumCardPaymentsByWaiter(
-      waiterId: u.id,
-      startMs: start,
-      endMs: end,
-    );
+
+    final total = totals['total'] ?? 0;
+    final cash = totals['cash'] ?? 0;
+    final card = totals['card'] ?? 0;
+    final expectedCash = totals['expectedCash'] ?? 0;
+
     final orders = await OrdersDao.I.countOrdersByWaiterInRange(
       u.id,
       start,
       end,
     );
 
-    final expectedCash =
-        cash; // placeholder: depends on how you compute expected
-    final diff = expectedCash - cash;
+    final actualCashC = TextEditingController();
 
     final ok = await showDialog<bool>(
       context: context,
@@ -262,12 +257,19 @@ class _AdminDashboardState extends State<AdminDashboard> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Total: ${moneyFromCents(total)}'),
-            Text('Cash: ${moneyFromCents(cash)}'),
-            Text('Card: ${moneyFromCents(card)}'),
+            Text('Total Sales: ${moneyFromCents(total)}'),
+            Text('Cash Collected: ${moneyFromCents(cash)}'),
+            Text('Card Payments: ${moneyFromCents(card)}'),
+            Text('Expected Cash: ${moneyFromCents(expectedCash)}'),
             Text('Orders: $orders'),
-            const SizedBox(height: 10),
-            const Text('Confirm settlement?'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: actualCashC,
+              decoration: const InputDecoration(
+                labelText: 'Actual Cash Counted (€)',
+              ),
+              keyboardType: TextInputType.number,
+            ),
           ],
         ),
         actions: [
@@ -277,7 +279,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Confirm'),
+            child: const Text('Settle'),
           ),
         ],
       ),
@@ -285,16 +287,19 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
     if (ok != true) return;
 
-    // create settlement and close shift
-    await SettlementsDao.I.createSettlement(
+    final actualCash =
+        (double.tryParse(actualCashC.text.replaceAll(',', '.')) ?? 0) * 100;
+
+    // create settlement and mark orders as settled
+    await SettlementsDao.I.settleWaiter(
       waiterId: u.id,
+      startMs: start,
+      endMs: end,
       totalCents: total,
       cashCents: cash,
       cardCents: card,
       expectedCashCents: expectedCash,
-      differenceCents: diff,
-      startMs: start,
-      endMs: end,
+      actualCashCents: actualCash.toInt(),
       notes: null,
       settledBy: Session.I.current!.id,
     );
@@ -304,6 +309,44 @@ class _AdminDashboardState extends State<AdminDashboard> {
       context,
     ).showSnackBar(const SnackBar(content: Text('Settlement recorded')));
     await _load();
+  }
+
+  Future<void> _deleteUser(AppUserRow u) async {
+    final me = Session.I.current!;
+    if (u.id == me.id) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cannot delete your own account')),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete User'),
+        content: Text(
+          'Are you sure you want to delete ${u.fullName ?? u.username}? This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await UsersDao.I.deleteUser(u.id);
+      await _load();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('User ${u.fullName ?? u.username} deleted')),
+      );
+    }
   }
 
   @override
@@ -337,6 +380,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   ),
                   icon: const Icon(Icons.people),
                   label: const Text('Manage Staff'),
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton.icon(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const WaiterSettlementScreen(),
+                    ),
+                  ),
+                  icon: const Icon(Icons.calculate),
+                  label: const Text('Settlement'),
                 ),
                 const SizedBox(width: 12),
                 Text('Staff / Waiters', style: TextStyle(color: textColor)),
@@ -426,7 +479,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             ),
                             DataColumn(
                               label: Text(
-                                'Open Orders',
+                                'Tables',
                                 style: TextStyle(color: textColor),
                               ),
                             ),
@@ -540,21 +593,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                 ),
                                 DataCell(
                                   FutureBuilder<int>(
-                                    future: OrdersDao.I.countOpenOrdersByWaiter(
+                                    future: TablesDao.I.countTablesByWaiter(
                                       u.id,
                                     ),
                                     builder: (context, snap) {
-                                      final open = snap.data ?? 0;
-                                      if (open > 0) {
-                                        return Text(
-                                          '$open',
-                                          style: TextStyle(
-                                            color: AppTheme.warning,
-                                          ),
-                                        );
-                                      }
+                                      final tables = snap.data ?? 0;
                                       return Text(
-                                        '0',
+                                        '$tables',
                                         style: TextStyle(color: textColor),
                                       );
                                     },
@@ -579,6 +624,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                           await _load();
                                         },
                                         child: const Text('Manage'),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      IconButton(
+                                        onPressed: () => _deleteUser(u),
+                                        icon: const Icon(
+                                          Icons.delete,
+                                          color: Colors.red,
+                                        ),
+                                        tooltip: 'Delete User',
                                       ),
                                     ],
                                   ),

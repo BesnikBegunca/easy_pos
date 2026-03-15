@@ -24,17 +24,24 @@ class _TablesScreenState extends State<TablesScreen> {
 
   Future<List<DiningTableRow>> _loadTables() async {
     try {
-      final list = await TablesDao.I.listTables();
+      final waiterId = Session.I.current!.id;
+      final list = await TablesDao.I.listTables(waiterId: waiterId);
 
-      // If empty, seed default tables and reload
+      // If empty, create 20 tables for this waiter
       if (list.isEmpty) {
-        await TablesDao.I.seedDefaultTables();
-        return await TablesDao.I.listTables();
+        await _createTablesForWaiter(waiterId);
+        return await TablesDao.I.listTables(waiterId: waiterId);
       }
       return list;
     } catch (e) {
       print('Error loading tables: $e');
       rethrow;
+    }
+  }
+
+  Future<void> _createTablesForWaiter(int waiterId) async {
+    for (int i = 1; i <= 20; i++) {
+      await TablesDao.I.addTable('Tavolina $i', waiterId: waiterId);
     }
   }
 

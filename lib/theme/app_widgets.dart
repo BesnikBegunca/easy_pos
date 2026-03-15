@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import '../theme/app_theme.dart';
 
 /// A basic scaffold with consistent layout for the app
@@ -24,7 +23,8 @@ class AppScaffold extends StatelessWidget {
               leading: topBar!.leading,
               title: Text(topBar!.title, style: AppTheme.titleMedium),
               backgroundColor: AppTheme.surface,
-              foregroundColor: Colors.white,
+              elevation: 0,
+              foregroundColor: AppTheme.primary,
               actions: topBar!.actions,
             )
           : null,
@@ -44,11 +44,17 @@ class AppTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppBar(leading: leading, title: Text(title), actions: actions);
+    return AppBar(
+      backgroundColor: AppTheme.surface,
+      elevation: 0,
+      leading: leading,
+      title: Text(title, style: AppTheme.titleMedium),
+      actions: actions,
+    );
   }
 }
 
-/// A simple card widget
+/// A modern card widget
 class AppCard extends StatelessWidget {
   final Widget child;
   final EdgeInsets? padding;
@@ -60,15 +66,22 @@ class AppCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppTheme.surface,
+        color: AppTheme.tile,
         borderRadius: AppTheme.borderRadius,
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
+        border: Border.all(color: AppTheme.borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.35),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: InkWell(
-        onTap: onTap,
         borderRadius: AppTheme.borderRadius,
+        onTap: onTap,
         child: Padding(
-          padding: padding ?? const EdgeInsets.all(16),
+          padding: padding ?? const EdgeInsets.all(AppTheme.spaceM),
           child: child,
         ),
       ),
@@ -93,17 +106,20 @@ class AppPrimaryButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return ElevatedButton.icon(
       onPressed: onPressed,
+      icon: icon != null ? Icon(icon, size: 20) : const SizedBox.shrink(),
+      label: Text(label),
       style: ElevatedButton.styleFrom(
         backgroundColor: AppTheme.primary,
         foregroundColor: Colors.white,
+        elevation: 0,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: AppTheme.borderRadius),
       ),
-      icon: icon != null ? Icon(icon) : const SizedBox.shrink(),
-      label: Text(label),
     );
   }
 }
 
-/// Secondary/quiet button
+/// Secondary / quiet button
 class AppQuietButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
@@ -120,24 +136,21 @@ class AppQuietButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return OutlinedButton.icon(
       onPressed: onPressed,
-      style: OutlinedButton.styleFrom(
-        side: BorderSide(color: Colors.white.withOpacity(0.3)),
-        foregroundColor: onPressed == null ? Colors.white38 : Colors.white,
-      ),
       icon: icon != null
-          ? Icon(icon, color: onPressed == null ? Colors.white38 : Colors.white)
+          ? Icon(icon, size: 20, color: AppTheme.primary)
           : const SizedBox.shrink(),
-      label: Text(
-        label,
-        style: TextStyle(
-          color: onPressed == null ? Colors.white38 : Colors.white,
-        ),
+      label: Text(label),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppTheme.primary,
+        side: BorderSide(color: AppTheme.primary.withOpacity(0.4)),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: AppTheme.borderRadius),
       ),
     );
   }
 }
 
-/// Text input field with consistent styling
+/// Text input field with dark + orange style
 class AppTextField extends StatelessWidget {
   final TextEditingController? controller;
   final String? label;
@@ -162,29 +175,34 @@ class AppTextField extends StatelessWidget {
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
-      style: const TextStyle(color: Colors.white),
+      style: const TextStyle(color: AppTheme.textPrimary),
       cursorColor: AppTheme.primary,
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(color: Colors.white),
-        hintText: hint,
-        hintStyle: const TextStyle(color: Colors.white),
-        suffixIcon: suffixIcon,
-        prefixIcon: prefixIcon != null
-            ? Icon(prefixIcon, color: Colors.white)
-            : null,
-        border: OutlineInputBorder(
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: AppTheme.primary),
-        ),
-      ),
       keyboardType: keyboardType,
       obscureText: obscureText,
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(color: AppTheme.textSecondary),
+        hintText: hint,
+        hintStyle: const TextStyle(color: AppTheme.textSecondary),
+        suffixIcon: suffixIcon,
+        prefixIcon: prefixIcon != null
+            ? Icon(prefixIcon, color: AppTheme.primary)
+            : null,
+        filled: true,
+        fillColor: AppTheme.tile,
+        border: OutlineInputBorder(
+          borderRadius: AppTheme.borderRadius,
+          borderSide: BorderSide(color: AppTheme.borderColor),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: AppTheme.borderRadius,
+          borderSide: BorderSide(color: AppTheme.borderColor),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: AppTheme.borderRadius,
+          borderSide: const BorderSide(color: AppTheme.primary, width: 1.5),
+        ),
+      ),
     );
   }
 }
@@ -205,13 +223,30 @@ class TopChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(30),
       onTap: onTap,
-      child: Chip(
-        avatar: Icon(icon, size: 18, color: Colors.white),
-        label: Text(label, style: const TextStyle(color: Colors.white)),
-        backgroundColor: Colors.transparent,
-        side: BorderSide(color: Colors.white.withOpacity(0.06)),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppTheme.tile,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppTheme.primary.withOpacity(0.4)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 16, color: AppTheme.primary),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: const TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
