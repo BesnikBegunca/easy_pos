@@ -2,7 +2,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-const int kDbVersion = 10;
+const int kDbVersion = 11;
 
 class AppDb {
   AppDb._();
@@ -56,7 +56,6 @@ class AppDb {
               );
             } catch (_) {}
 
-            // settlements table
             try {
               await db.execute('''
 CREATE TABLE IF NOT EXISTS settlements(
@@ -101,7 +100,26 @@ CREATE TABLE IF NOT EXISTS settlements(
             } catch (_) {}
           }
 
-          // Ensure tables exist (with latest schema) + seed
+          if (oldV < 11) {
+            try {
+              await db.execute('''
+CREATE TABLE IF NOT EXISTS printed_sales(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  waiter_id INTEGER NOT NULL,
+  order_id INTEGER NOT NULL,
+  table_id INTEGER NOT NULL,
+  amount_cents INTEGER NOT NULL DEFAULT 0,
+  printed_at INTEGER NOT NULL,
+  settled_id INTEGER,
+  FOREIGN KEY(waiter_id) REFERENCES users(id),
+  FOREIGN KEY(order_id) REFERENCES orders(id),
+  FOREIGN KEY(table_id) REFERENCES dining_tables(id),
+  FOREIGN KEY(settled_id) REFERENCES settlements(id)
+);
+''');
+            } catch (_) {}
+          }
+
           await _createAll(db);
           await _seedDefaults(db);
         },
@@ -145,7 +163,7 @@ CREATE TABLE IF NOT EXISTS sales(
 );
 ''');
 
-    // TABLES  ✅ waiter_id included
+    // TABLES
     await db.execute('''
 CREATE TABLE IF NOT EXISTS dining_tables(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -179,7 +197,7 @@ CREATE TABLE IF NOT EXISTS products(
 );
 ''');
 
-    // ORDERS ✅ settled_id included
+    // ORDERS
     await db.execute('''
 CREATE TABLE IF NOT EXISTS orders(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -211,7 +229,7 @@ CREATE TABLE IF NOT EXISTS order_items(
 );
 ''');
 
-    // PAYMENTS ✅ order_id included
+    // PAYMENTS
     await db.execute('''
 CREATE TABLE IF NOT EXISTS payments(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -264,6 +282,23 @@ CREATE TABLE IF NOT EXISTS settlements(
   settled_at INTEGER NOT NULL,
   FOREIGN KEY(waiter_id) REFERENCES users(id),
   FOREIGN KEY(settled_by) REFERENCES users(id)
+);
+''');
+
+    // PRINTED SALES
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS printed_sales(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  waiter_id INTEGER NOT NULL,
+  order_id INTEGER NOT NULL,
+  table_id INTEGER NOT NULL,
+  amount_cents INTEGER NOT NULL DEFAULT 0,
+  printed_at INTEGER NOT NULL,
+  settled_id INTEGER,
+  FOREIGN KEY(waiter_id) REFERENCES users(id),
+  FOREIGN KEY(order_id) REFERENCES orders(id),
+  FOREIGN KEY(table_id) REFERENCES dining_tables(id),
+  FOREIGN KEY(settled_id) REFERENCES settlements(id)
 );
 ''');
   }
@@ -374,9 +409,10 @@ CREATE TABLE IF NOT EXISTS settlements(
       }
     }
 
-    // order_items.note
+    // order_items.note + is_printed
     final oi = await db.rawQuery('PRAGMA table_info(order_items)');
     final oiCols = oi.map((r) => (r['name'] as String?) ?? '').toList();
+
     if (!oiCols.contains('note')) {
       try {
         await db.execute('ALTER TABLE order_items ADD COLUMN note TEXT');
@@ -386,9 +422,21 @@ CREATE TABLE IF NOT EXISTS settlements(
       }
     }
 
-    // users.shift_started_at
+    if (!oiCols.contains('is_printed')) {
+      try {
+        await db.execute(
+          'ALTER TABLE order_items ADD COLUMN is_printed INTEGER NOT NULL DEFAULT 0',
+        );
+        print('Added missing column `is_printed` to order_items');
+      } catch (e) {
+        print('Failed to add `is_printed`: $e');
+      }
+    }
+
+    // users.shift_started_at + on_shift
     final uInfo = await db.rawQuery('PRAGMA table_info(users)');
     final uCols = uInfo.map((r) => (r['name'] as String?) ?? '').toList();
+
     if (!uCols.contains('shift_started_at')) {
       try {
         await db.execute(
@@ -414,6 +462,7 @@ CREATE TABLE IF NOT EXISTS settlements(
     // orders.settled_id
     final oInfo = await db.rawQuery('PRAGMA table_info(orders)');
     final oCols = oInfo.map((r) => (r['name'] as String?) ?? '').toList();
+
     if (!oCols.contains('settled_id')) {
       try {
         await db.execute('ALTER TABLE orders ADD COLUMN settled_id INTEGER');
@@ -423,9 +472,10 @@ CREATE TABLE IF NOT EXISTS settlements(
       }
     }
 
-    // payments.order_id ✅ THIS FIXES YOUR 00
+    // payments.order_id
     final pInfo = await db.rawQuery('PRAGMA table_info(payments)');
     final pCols = pInfo.map((r) => (r['name'] as String?) ?? '').toList();
+
     if (!pCols.contains('order_id')) {
       try {
         await db.execute('ALTER TABLE payments ADD COLUMN order_id INTEGER');
@@ -435,15 +485,38 @@ CREATE TABLE IF NOT EXISTS settlements(
       }
     }
 
-    // order_items.is_printed
-    if (!oiCols.contains('is_printed')) {
+    // printed_sales table
+    try {
+      await db.execute('''
+CREATE TABLE IF NOT EXISTS printed_sales(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  waiter_id INTEGER NOT NULL,
+  order_id INTEGER NOT NULL,
+  table_id INTEGER NOT NULL,
+  amount_cents INTEGER NOT NULL DEFAULT 0,
+  printed_at INTEGER NOT NULL,
+  settled_id INTEGER,
+  FOREIGN KEY(waiter_id) REFERENCES users(id),
+  FOREIGN KEY(order_id) REFERENCES orders(id),
+  FOREIGN KEY(table_id) REFERENCES dining_tables(id),
+  FOREIGN KEY(settled_id) REFERENCES settlements(id)
+);
+''');
+    } catch (e) {
+      print('Failed to ensure `printed_sales`: $e');
+    }
+
+    final psInfo = await db.rawQuery('PRAGMA table_info(printed_sales)');
+    final psCols = psInfo.map((r) => (r['name'] as String?) ?? '').toList();
+
+    if (!psCols.contains('settled_id')) {
       try {
         await db.execute(
-          'ALTER TABLE order_items ADD COLUMN is_printed INTEGER NOT NULL DEFAULT 0',
+          'ALTER TABLE printed_sales ADD COLUMN settled_id INTEGER',
         );
-        print('Added missing column `is_printed` to order_items');
+        print('Added missing column `settled_id` to printed_sales');
       } catch (e) {
-        print('Failed to add `is_printed`: $e');
+        print('Failed to add `settled_id` to printed_sales: $e');
       }
     }
   }
