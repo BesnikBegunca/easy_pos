@@ -30,7 +30,7 @@ class TablesDao {
   Future<List<DiningTableRow>> listTables({int? waiterId}) async {
     final db = await AppDb.I.db;
     String whereClause = 'is_active=1';
-    List<Object?> whereArgs = [];
+    final List<Object?> whereArgs = [];
 
     if (waiterId != null) {
       whereClause += ' AND waiter_id=?';
@@ -44,7 +44,6 @@ class TablesDao {
       orderBy: 'id ASC',
     );
 
-    // Get table statuses and totals based on orders
     final tableData = await _getTableData(waiterId: waiterId);
 
     return rows
@@ -63,7 +62,7 @@ class TablesDao {
   Future<Map<int, _TableData>> _getTableData({int? waiterId}) async {
     final db = await AppDb.I.db;
     String whereClause = 'is_active=1';
-    List<Object?> whereArgs = [];
+    final List<Object?> whereArgs = [];
 
     if (waiterId != null) {
       whereClause += ' AND waiter_id=?';
@@ -75,15 +74,15 @@ class TablesDao {
       where: whereClause,
       whereArgs: whereArgs,
     );
+
     final Map<int, _TableData> data = {};
     for (final row in rows) {
       final tableId = row['id'] as int;
       data[tableId] = _TableData(status: 'free', totalCents: 0);
     }
 
-    // Get totals for open orders
-    String orderWhere = 'o.status = \'open\'';
-    List<Object?> orderArgs = [];
+    String orderWhere = "o.status = 'open'";
+    final List<Object?> orderArgs = [];
 
     if (waiterId != null) {
       orderWhere += ' AND o.waiter_id=?';
@@ -91,15 +90,17 @@ class TablesDao {
     }
 
     final totalRows = await db.rawQuery('''
-      SELECT o.table_id, SUM(oi.line_total_cents) AS total_cents
+      SELECT o.table_id, COALESCE(SUM(oi.line_total_cents), 0) AS total_cents
       FROM orders o
-      JOIN order_items oi ON oi.order_id = o.id
+      LEFT JOIN order_items oi ON oi.order_id = o.id
       WHERE $orderWhere
       GROUP BY o.table_id
-    ''', orderArgs);
+      ''', orderArgs);
+
     for (final row in totalRows) {
       final tableId = row['table_id'] as int;
-      final totalCents = row['total_cents'] as int;
+      final totalCents = (row['total_cents'] as num?)?.toInt() ?? 0;
+
       if (data.containsKey(tableId)) {
         data[tableId] = _TableData(
           status: totalCents > 0 ? 'open' : 'free',
@@ -134,6 +135,7 @@ class TablesDao {
   Future<void> seedDefaultTables() async {
     final db = await AppDb.I.db;
     final now = DateTime.now().millisecondsSinceEpoch;
+
     for (int i = 1; i <= 10; i++) {
       final name = 'Tavolina $i';
       final existing = await db.query(
@@ -142,6 +144,7 @@ class TablesDao {
         whereArgs: [i],
         limit: 1,
       );
+
       if (existing.isEmpty) {
         await db.insert('dining_tables', {
           'id': i,
@@ -150,7 +153,6 @@ class TablesDao {
           'created_at': now,
         });
       } else {
-        // Ensure it's active and has correct name
         await db.update(
           'dining_tables',
           {'is_active': 1, 'name': name},
@@ -161,12 +163,73 @@ class TablesDao {
     }
   }
 
+  /// Kthen sa tavolina UNIKE i ka pas kamarieri të hapura gjatë shift-it aktual.
+  ///
+  /// Logjika:
+  /// - e lexon shift_started_at nga tabela users
+  /// - i numëron tavolinat DISTINCT nga orders
+  /// - nëse s’ka shift_started_at, kthen 0
   Future<int> countTablesByWaiter(int waiterId) async {
     final db = await AppDb.I.db;
-    final rows = await db.rawQuery(
-      'SELECT COUNT(*) AS c FROM dining_tables WHERE waiter_id = ? AND is_active = 1',
-      [waiterId],
+
+    final waiterRows = await db.query(
+      'users',
+      columns: ['shift_started_at'],
+      where: 'id=?',
+      whereArgs: [waiterId],
+      limit: 1,
     );
-    return (rows.first['c'] as int?) ?? 0;
+
+    if (waiterRows.isEmpty) return 0;
+
+    final shiftStartedAt = waiterRows.first['shift_started_at'] as int?;
+    if (shiftStartedAt == null || shiftStartedAt <= 0) {
+      return 0;
+    }
+
+    final rows = await db.rawQuery(
+      '''
+      SELECT COUNT(DISTINCT table_id) AS c
+      FROM orders
+      WHERE waiter_id = ?
+        AND created_at >= ?
+      ''',
+      [waiterId, shiftStartedAt],
+    );
+
+    return (rows.first['c'] as num?)?.toInt() ?? 0;
+  }
+
+  /// Nëse don me dit sa HERË është hap një tavolinë gjatë shift-it
+  /// (jo sa tavolina unike), përdore këtë.
+  Future<int> countTableOpenEventsByWaiter(int waiterId) async {
+    final db = await AppDb.I.db;
+
+    final waiterRows = await db.query(
+      'users',
+      columns: ['shift_started_at'],
+      where: 'id=?',
+      whereArgs: [waiterId],
+      limit: 1,
+    );
+
+    if (waiterRows.isEmpty) return 0;
+
+    final shiftStartedAt = waiterRows.first['shift_started_at'] as int?;
+    if (shiftStartedAt == null || shiftStartedAt <= 0) {
+      return 0;
+    }
+
+    final rows = await db.rawQuery(
+      '''
+      SELECT COUNT(*) AS c
+      FROM orders
+      WHERE waiter_id = ?
+        AND created_at >= ?
+      ''',
+      [waiterId, shiftStartedAt],
+    );
+
+    return (rows.first['c'] as num?)?.toInt() ?? 0;
   }
 }
