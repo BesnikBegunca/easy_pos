@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../auth/session.dart';
-import '../data/dao_payments.dart';
 import '../data/dao_day_sessions.dart';
+import '../data/dao_payments.dart';
 import '../util/money.dart';
 
 class SettlementScreen extends StatefulWidget {
@@ -13,6 +13,8 @@ class SettlementScreen extends StatefulWidget {
 
 class _SettlementScreenState extends State<SettlementScreen> {
   bool loading = true;
+  bool settling = false;
+
   DaySessionRow? session;
 
   int cashSales = 0;
@@ -20,54 +22,96 @@ class _SettlementScreenState extends State<SettlementScreen> {
 
   final actualCashC = TextEditingController();
 
-  int get totalSales => cashSales + cardSales;
-  int get expectedCash => (session?.openingCashCents ?? 0) + cashSales;
-
-  int get actualCash =>
-      ((double.tryParse(actualCashC.text.replaceAll(',', '.')) ?? 0) * 100)
-          .toInt();
-
-  int get difference => actualCash - expectedCash;
-
-  Future<void> _load() async {
-    setState(() => loading = true);
-
-    final today = DateTime.now();
-    final date =
-        '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
-
-    session = await DaySessionsDao.I.getSessionForDate(date);
-
-    if (session == null) {
-      await DaySessionsDao.I.createSession(date: date, openingCashCents: 0);
-      session = await DaySessionsDao.I.getSessionForDate(date);
-    }
-
-    cashSales = await PaymentsDao.I.sumCashPayments(today);
-    cardSales = await PaymentsDao.I.sumCardPayments(today);
-
-    if (!mounted) return;
-    setState(() => loading = false);
-  }
-
-  Future<void> _settle() async {
-    await DaySessionsDao.I.settleSession(
-      date: session!.date,
-      actualCashCents: actualCash,
-      settledBy: Session.I.current!.id,
-      notes: null,
-    );
-
-    Navigator.pop(context);
-  }
-
   @override
   void initState() {
     super.initState();
     _load();
   }
 
-  Widget statCard(String title, String value, {Color? color}) {
+  @override
+  void dispose() {
+    actualCashC.dispose();
+    super.dispose();
+  }
+
+  int get totalSales => cashSales + cardSales;
+  int get expectedCash => (session?.openingCashCents ?? 0) + cashSales;
+
+  int get actualCash {
+    final value = double.tryParse(actualCashC.text.trim().replaceAll(',', '.')) ?? 0;
+    return (value * 100).round();
+  }
+
+  int get difference => actualCash - expectedCash;
+
+  String _todayKey(DateTime now) {
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _load() async {
+    setState(() => loading = true);
+
+    final now = DateTime.now();
+    final date = _todayKey(now);
+
+    session = await DaySessionsDao.I.getSessionForDate(date);
+
+    if (session == null) {
+      await DaySessionsDao.I.createSession(
+        date: date,
+        openingCashCents: 0,
+      );
+      session = await DaySessionsDao.I.getSessionForDate(date);
+    }
+
+    cashSales = await PaymentsDao.I.sumCashPayments(now);
+    cardSales = await PaymentsDao.I.sumCardPayments(now);
+
+    if (!mounted) return;
+    setState(() => loading = false);
+  }
+
+  Future<void> _settle() async {
+    if (session == null || settling) return;
+
+    setState(() => settling = true);
+
+    try {
+      await DaySessionsDao.I.settleSession(
+        date: session!.date,
+        actualCashCents: actualCash,
+        settledBy: Session.I.current!.id,
+        notes: null,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        // Pas settlement-it ekrani resetohet menjëherë në 0.00
+        // që të mos shfaqen prapë totalet e vjetra në UI.
+        cashSales = 0;
+        cardSales = 0;
+        actualCashC.clear();
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Day settlement u kry me sukses.')),
+      );
+
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gabim gjatë settlement: $e')));
+    } finally {
+      if (mounted) {
+        setState(() => settling = false);
+      }
+    }
+  }
+
+  Widget _statCard(String title, String value, {Color? color}) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(14),
@@ -81,7 +125,10 @@ class _SettlementScreenState extends State<SettlementScreen> {
             const SizedBox(height: 6),
             Text(
               value,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ],
         ),
@@ -89,93 +136,87 @@ class _SettlementScreenState extends State<SettlementScreen> {
     );
   }
 
+  Widget _differenceCard() {
+    final ok = difference >= 0;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: ok ? Colors.green.shade50 : Colors.red.shade50,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        children: [
+          const Text('Difference'),
+          const SizedBox(height: 8),
+          Text(
+            moneyFromCents(difference),
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: ok ? Colors.green : Colors.red,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Day Settlement")),
+      appBar: AppBar(title: const Text('Day Settlement')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            /// STATS
             Row(
               children: [
-                statCard("Cash", moneyFromCents(cashSales)),
+                _statCard('Cash', moneyFromCents(cashSales)),
                 const SizedBox(width: 10),
-                statCard("Card", moneyFromCents(cardSales)),
+                _statCard('Card', moneyFromCents(cardSales)),
               ],
             ),
-
             const SizedBox(height: 10),
-
             Row(
               children: [
-                statCard(
-                  "Total",
+                _statCard(
+                  'Total',
                   moneyFromCents(totalSales),
                   color: Colors.blue.shade50,
                 ),
                 const SizedBox(width: 10),
-                statCard(
-                  "Expected",
+                _statCard(
+                  'Expected',
                   moneyFromCents(expectedCash),
                   color: Colors.orange.shade50,
                 ),
               ],
             ),
-
             const SizedBox(height: 20),
-
-            /// INPUT
             TextField(
               controller: actualCashC,
-              keyboardType: TextInputType.number,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(
-                labelText: "Actual Cash (€)",
+                labelText: 'Actual Cash (€)',
                 border: OutlineInputBorder(),
               ),
               onChanged: (_) => setState(() {}),
             ),
-
             const SizedBox(height: 20),
-
-            /// DIFFERENCE BIG
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: difference >= 0
-                    ? Colors.green.shade50
-                    : Colors.red.shade50,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                children: [
-                  const Text("Difference"),
-                  const SizedBox(height: 8),
-                  Text(
-                    moneyFromCents(difference),
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: difference >= 0 ? Colors.green : Colors.red,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
+            _differenceCard(),
             const Spacer(),
-
-            /// BUTTON
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: _settle,
-                child: const Text("SETTLE"),
+                onPressed: settling ? null : _settle,
+                child: Text(settling ? 'DUKE RUJT...' : 'SETTLE'),
               ),
             ),
           ],

@@ -102,6 +102,13 @@ class SettlementsDao {
     );
   }
 
+  /// FIXED: Complete waiter settlement with atomic DB transaction.
+  /// 1. Insert settlement record
+  /// 2. Mark printed_sales as settled for the shift range (past prints)
+  /// 3. Close ALL current open tables for waiter: status='free', waiter_id=null
+  /// 4. For each table, mark open orders as 'paid', set final total_cents, settled_id, closed_at
+  /// 5. Reset waiter shift_started_at for fresh start
+  /// Now tables no longer appear open for waiter, totals start from 0.00.
   Future<void> settleWaiter({
     required int waiterId,
     required int startMs,
@@ -115,33 +122,83 @@ class SettlementsDao {
     required int settledBy,
   }) async {
     final db = await AppDb.I.db;
+    await db.transaction((txn) async {
+      // 1. Create settlement record
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+      final settlementId = await txn.insert('settlements', {
+        'waiter_id': waiterId,
+        'total_cents': totalCents,
+        'cash_cents': cashCents,
+        'card_cents': cardCents,
+        'expected_cash_cents': expectedCashCents,
+        'difference_cents': actualCashCents - expectedCashCents,
+        'start_ms': startMs,
+        'end_ms': endMs,
+        'notes': notes,
+        'settled_by': settledBy,
+        'settled_at': nowMs,
+      });
 
-    final settlementId = await db.insert('settlements', {
-      'waiter_id': waiterId,
-      'total_cents': totalCents,
-      'cash_cents': cashCents,
-      'card_cents': cardCents,
-      'expected_cash_cents': expectedCashCents,
-      'difference_cents': actualCashCents - expectedCashCents,
-      'start_ms': startMs,
-      'end_ms': endMs,
-      'notes': notes,
-      'settled_by': settledBy,
-      'settled_at': DateTime.now().millisecondsSinceEpoch,
+      // 2. Mark past printed_sales as settled (by shift range)
+      await txn.update(
+        'printed_sales',
+        {'settled_id': settlementId},
+        where: 'waiter_id = ? AND printed_at >= ? AND printed_at < ? AND (settled_id IS NULL OR settled_id = 0)',
+        whereArgs: [waiterId, startMs, endMs],
+      );
+
+      // 3. Close ALL open tables for this waiter
+      final openTables = await txn.rawQuery(
+        'SELECT id FROM dining_tables WHERE waiter_id = ? AND is_active = 1',
+        [waiterId],
+      );
+      print('Closing ${openTables.length} open tables for waiter $waiterId during settlement');
+
+      final nowClosedAt = nowMs; // consistent timestamp
+
+      for (final tableRow in openTables) {
+        final tableId = tableRow['id'] as int;
+
+        // Close open orders for this table, set final totals and link to settlement
+        final totalRows = await txn.rawQuery('''
+          SELECT COALESCE(SUM(oi.line_total_cents), 0) AS total_cents
+          FROM orders o
+          LEFT JOIN order_items oi ON oi.order_id = o.id
+          WHERE o.table_id = ? AND o.status = 'open' AND o.waiter_id = ?
+        ''', [tableId, waiterId]);
+
+        final orderTotalCents = (totalRows.first['total_cents'] as num?)?.toInt() ?? 0;
+
+        // Update orders to 'paid' / settled
+        await txn.update(
+          'orders',
+          {
+            'status': 'paid',
+            'total_cents': orderTotalCents,
+            'closed_at': nowClosedAt,
+            'settled_id': settlementId,
+          },
+          where: 'table_id = ? AND status = "open" AND waiter_id = ?',
+          whereArgs: [tableId, waiterId],
+        );
+
+        // Free the table
+        await txn.update(
+          'dining_tables',
+          {'status': 'free', 'waiter_id': null},
+          where: 'id = ?',
+          whereArgs: [tableId],
+        );
+      }
+
+      // 4. Reset waiter shift for fresh start
+      await txn.update(
+        'users',
+        {'shift_started_at': nowMs},
+        where: 'id = ?',
+        whereArgs: [waiterId],
+      );
     });
-
-    await PrintedSalesDao.I.markSettled(
-      waiterId: waiterId,
-      startMs: startMs,
-      endMs: endMs,
-      settlementId: settlementId,
-    );
-
-    await db.update(
-      'users',
-      {'shift_started_at': DateTime.now().millisecondsSinceEpoch},
-      where: 'id = ?',
-      whereArgs: [waiterId],
-    );
   }
 }
+
