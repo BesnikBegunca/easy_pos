@@ -2,7 +2,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-const int kDbVersion = 11;
+const int kDbVersion = 12;
 
 class AppDb {
   AppDb._();
@@ -117,6 +117,14 @@ CREATE TABLE IF NOT EXISTS printed_sales(
   FOREIGN KEY(settled_id) REFERENCES settlements(id)
 );
 ''');
+            } catch (_) {}
+          }
+
+          if (oldV < 12) {
+            try {
+              await db.execute(
+                'ALTER TABLE settlements ADD COLUMN premium_cents INTEGER NOT NULL DEFAULT 0',
+              );
             } catch (_) {}
           }
 
@@ -275,6 +283,7 @@ CREATE TABLE IF NOT EXISTS settlements(
   card_cents INTEGER NOT NULL,
   expected_cash_cents INTEGER NOT NULL,
   difference_cents INTEGER NOT NULL,
+  premium_cents INTEGER NOT NULL DEFAULT 0,
   start_ms INTEGER NOT NULL,
   end_ms INTEGER NOT NULL,
   notes TEXT,
@@ -482,6 +491,21 @@ CREATE TABLE IF NOT EXISTS printed_sales(
         print('Added missing column `order_id` to payments');
       } catch (e) {
         print('Failed to add `order_id`: $e');
+      }
+    }
+
+    // settlements.premium_cents
+    final sInfo = await db.rawQuery('PRAGMA table_info(settlements)');
+    final sCols = sInfo.map((r) => (r['name'] as String?) ?? '').toList();
+
+    if (!sCols.contains('premium_cents')) {
+      try {
+        await db.execute(
+          'ALTER TABLE settlements ADD COLUMN premium_cents INTEGER NOT NULL DEFAULT 0',
+        );
+        print('Added missing column `premium_cents` to settlements');
+      } catch (e) {
+        print('Failed to add `premium_cents`: $e');
       }
     }
 

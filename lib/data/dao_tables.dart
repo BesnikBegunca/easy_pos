@@ -1,5 +1,25 @@
 import 'db.dart';
 
+class FullTableRow {
+  final int id;
+  final String name;
+  final String status;
+  final int? waiterId;
+  final String? waiterName;
+  final int openTotalCents;
+
+  const FullTableRow({
+    required this.id,
+    required this.name,
+    required this.status,
+    this.waiterId,
+    this.waiterName,
+    this.openTotalCents = 0,
+  });
+
+  bool get isOpen => openTotalCents > 0 || status == 'open';
+}
+
 class _TableData {
   final String status;
   final int totalCents;
@@ -198,6 +218,105 @@ class TablesDao {
     );
 
     return (rows.first['c'] as num?)?.toInt() ?? 0;
+  }
+
+  /// Liron tavolinën pas largimit të klientëve.
+  /// Shënon porositë e hapura si 'paid' dhe liron tavolinën.
+  /// NUK prek printed_sales — totali i kamarjerit mbetet i pandryshuar.
+  Future<void> releaseTableAsWaiter(int tableId) async {
+    final db = await AppDb.I.db;
+    await db.transaction((txn) async {
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+      // Shëno porositë si paid (klientët janë larguar) — NUK anulohen
+      await txn.update(
+        'orders',
+        {'status': 'paid', 'closed_at': nowMs},
+        where: 'table_id = ? AND status = "open"',
+        whereArgs: [tableId],
+      );
+      // Liro tavolinën
+      await txn.update(
+        'dining_tables',
+        {'status': 'free', 'waiter_id': null},
+        where: 'id = ?',
+        whereArgs: [tableId],
+      );
+    });
+  }
+
+  Future<void> closeTableForcefully(int tableId) async {
+    final db = await AppDb.I.db;
+    await db.transaction((txn) async {
+      await txn.update(
+        'orders',
+        {'status': 'cancelled', 'closed_at': DateTime.now().millisecondsSinceEpoch},
+        where: 'table_id = ? AND status = "open"',
+        whereArgs: [tableId],
+      );
+      await txn.update(
+        'dining_tables',
+        {'status': 'free', 'waiter_id': null},
+        where: 'id = ?',
+        whereArgs: [tableId],
+      );
+    });
+  }
+
+  Future<void> closeAllTablesForWaiter(int waiterId) async {
+    final db = await AppDb.I.db;
+    await db.transaction((txn) async {
+      final tables = await txn.query(
+        'dining_tables',
+        columns: ['id'],
+        where: 'waiter_id = ? AND is_active = 1',
+        whereArgs: [waiterId],
+      );
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+      for (final t in tables) {
+        final tableId = t['id'] as int;
+        await txn.update(
+          'orders',
+          {'status': 'cancelled', 'closed_at': nowMs},
+          where: 'table_id = ? AND status = "open"',
+          whereArgs: [tableId],
+        );
+        await txn.update(
+          'dining_tables',
+          {'status': 'free', 'waiter_id': null},
+          where: 'id = ?',
+          whereArgs: [tableId],
+        );
+      }
+    });
+  }
+
+  Future<List<FullTableRow>> listTablesWithWaiters() async {
+    final db = await AppDb.I.db;
+    final rows = await db.rawQuery('''
+      SELECT
+        dt.id, dt.name, dt.status, dt.waiter_id,
+        COALESCE(NULLIF(TRIM(u.full_name),''), u.username) AS waiter_display,
+        COALESCE((
+          SELECT SUM(oi.line_total_cents)
+          FROM orders o
+          JOIN order_items oi ON oi.order_id = o.id
+          WHERE o.table_id = dt.id AND o.status = 'open'
+        ), 0) AS open_total
+      FROM dining_tables dt
+      LEFT JOIN users u ON u.id = dt.waiter_id
+      WHERE dt.is_active = 1
+      ORDER BY dt.id ASC
+    ''');
+    return rows
+        .map((r) => FullTableRow(
+              id: r['id'] as int,
+              name: r['name'] as String,
+              status: r['status'] as String? ?? 'free',
+              waiterId: r['waiter_id'] as int?,
+              waiterName: r['waiter_display'] as String?,
+              openTotalCents: (r['open_total'] as int?) ?? 0,
+            ))
+        .toList();
   }
 
   /// Nëse don me dit sa HERË është hap një tavolinë gjatë shift-it

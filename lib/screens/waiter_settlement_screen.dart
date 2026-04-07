@@ -23,6 +23,7 @@ class _WaiterSettlementScreenState extends State<WaiterSettlementScreen> {
   Map<String, int> totals = const <String, int>{};
 
   final actualCashC = TextEditingController();
+  final premiumC = TextEditingController();
   final notesC = TextEditingController();
 
   @override
@@ -34,6 +35,7 @@ class _WaiterSettlementScreenState extends State<WaiterSettlementScreen> {
   @override
   void dispose() {
     actualCashC.dispose();
+    premiumC.dispose();
     notesC.dispose();
     super.dispose();
   }
@@ -45,6 +47,11 @@ class _WaiterSettlementScreenState extends State<WaiterSettlementScreen> {
 
   int get actualCash {
     final value = double.tryParse(actualCashC.text.trim().replaceAll(',', '.')) ?? 0;
+    return (value * 100).round();
+  }
+
+  int get premiumCents {
+    final value = double.tryParse(premiumC.text.trim().replaceAll(',', '.')) ?? 0;
     return (value * 100).round();
   }
 
@@ -97,7 +104,6 @@ class _WaiterSettlementScreenState extends State<WaiterSettlementScreen> {
           'expectedCash': data['expectedCash'] ?? 0,
         };
 
-        // Kur settlement është kryer njëherë, çdo refresh duhet me e mbajt UI në 0.00.
         actualCashC.text = moneyFromCents(expectedCash).replaceAll('€', '').trim();
       });
     } catch (e) {
@@ -118,6 +124,7 @@ class _WaiterSettlementScreenState extends State<WaiterSettlementScreen> {
         'expectedCash': 0,
       };
       actualCashC.clear();
+      premiumC.clear();
       notesC.clear();
       selectedWaiter = null;
     });
@@ -150,6 +157,7 @@ class _WaiterSettlementScreenState extends State<WaiterSettlementScreen> {
         cardCents: card,
         expectedCashCents: expectedCash,
         actualCashCents: actualCash,
+        premiumCents: premiumCents,
         notes: notesC.text.trim().isEmpty ? null : notesC.text.trim(),
         settledBy: Session.I.current!.id,
       );
@@ -164,7 +172,7 @@ class _WaiterSettlementScreenState extends State<WaiterSettlementScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Settlement u kry me sukses. Totali u kthye në 0.00 dhe waiter mund ta nisë shiftin nga zero.',
+            'Settlement u kry me sukses. Totali u kthye në 0.00 dhe shifti i ri mund të fillojë.',
           ),
         ),
       );
@@ -323,6 +331,70 @@ class _WaiterSettlementScreenState extends State<WaiterSettlementScreen> {
     );
   }
 
+  Widget _premiumCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.amber.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.amber.withValues(alpha: 0.30)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.workspace_premium_outlined, color: Colors.amber.shade700, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Premium / Bonus',
+                style: AppTheme.bodyMedium.copyWith(
+                  color: Colors.amber.shade700,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: premiumC,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              labelText: 'Premium (€)',
+              hintText: '0.00',
+              prefixIcon: const Icon(Icons.workspace_premium_outlined),
+              filled: true,
+              fillColor: AppTheme.surface,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(color: Colors.amber.withValues(alpha: 0.40)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(color: Colors.amber.shade700),
+              ),
+            ),
+          ),
+          if (premiumCents > 0) ...[
+            const SizedBox(height: 10),
+            Text(
+              'Premium i regjistruar: ${moneyFromCents(premiumCents)}',
+              style: AppTheme.bodySmall.copyWith(
+                color: Colors.amber.shade700,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   String _waiterName(AppUserRow w) {
     final full = w.fullName?.trim() ?? '';
     return full.isNotEmpty ? full : w.username;
@@ -428,6 +500,7 @@ class _WaiterSettlementScreenState extends State<WaiterSettlementScreen> {
                                     selectedWaiter = w;
                                     totals = const {};
                                     actualCashC.clear();
+                                    premiumC.clear();
                                     notesC.clear();
                                   });
 
@@ -526,6 +599,12 @@ class _WaiterSettlementScreenState extends State<WaiterSettlementScreen> {
                                       expectedCash,
                                       valueColor: AppTheme.primary,
                                     ),
+                                    if (premiumCents > 0)
+                                      _summaryRow(
+                                        'Premium / Bonus',
+                                        premiumCents,
+                                        valueColor: Colors.amber.shade700,
+                                      ),
                                     const SizedBox(height: 16),
                                     TextField(
                                       controller: actualCashC,
@@ -552,6 +631,8 @@ class _WaiterSettlementScreenState extends State<WaiterSettlementScreen> {
                                     ),
                                     const SizedBox(height: 14),
                                     _differenceCard(),
+                                    const SizedBox(height: 14),
+                                    _premiumCard(),
                                     const SizedBox(height: 14),
                                     TextField(
                                       controller: notesC,

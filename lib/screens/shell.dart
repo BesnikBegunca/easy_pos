@@ -10,18 +10,13 @@ class ShellScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final u = Session.I.current!;
-    Widget body;
 
-    // brenda ShellScreen build:
-    if (u.role == UserRole.waiter)
-      body = const TablesScreen();
-    else if (u.role == UserRole.manager)
-      body = const TablesScreen(); // + ma vonë reports
-    else if (u.role == UserRole.admin)
-      body = const AdminDashboard();
-    else
-      body = const TablesScreen(); // fallback
+    // Admin has its own full-screen scaffold with custom nav
+    if (u.role == UserRole.admin) {
+      return const AdminDashboard();
+    }
 
+    // Waiter / manager
     return Scaffold(
       appBar: AppBar(
         title: Text('POS — ${u.username} (${roleToString(u.role)})'),
@@ -35,7 +30,7 @@ class ShellScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: body,
+      body: const TablesScreen(),
     );
   }
 }

@@ -9,6 +9,7 @@ class SettlementRow {
   final int cardCents;
   final int expectedCashCents;
   final int differenceCents;
+  final int premiumCents;
   final int startMs;
   final int endMs;
   final String? notes;
@@ -23,6 +24,7 @@ class SettlementRow {
     required this.cardCents,
     required this.expectedCashCents,
     required this.differenceCents,
+    this.premiumCents = 0,
     required this.startMs,
     required this.endMs,
     this.notes,
@@ -42,6 +44,7 @@ class SettlementsDao {
     required int cardCents,
     required int expectedCashCents,
     required int differenceCents,
+    int premiumCents = 0,
     required int startMs,
     required int endMs,
     String? notes,
@@ -55,6 +58,7 @@ class SettlementsDao {
       'card_cents': cardCents,
       'expected_cash_cents': expectedCashCents,
       'difference_cents': differenceCents,
+      'premium_cents': premiumCents,
       'start_ms': startMs,
       'end_ms': endMs,
       'notes': notes,
@@ -81,6 +85,7 @@ class SettlementsDao {
         cardCents: r['card_cents'] as int,
         expectedCashCents: r['expected_cash_cents'] as int,
         differenceCents: r['difference_cents'] as int,
+        premiumCents: (r['premium_cents'] as int?) ?? 0,
         startMs: r['start_ms'] as int,
         endMs: r['end_ms'] as int,
         notes: r['notes'] as String?,
@@ -102,13 +107,12 @@ class SettlementsDao {
     );
   }
 
-  /// FIXED: Complete waiter settlement with atomic DB transaction.
-  /// 1. Insert settlement record
-  /// 2. Mark printed_sales as settled for the shift range (past prints)
+  /// Complete waiter settlement with atomic DB transaction.
+  /// 1. Insert settlement record (me premium_cents)
+  /// 2. Mark printed_sales as settled for the shift range
   /// 3. Close ALL current open tables for waiter: status='free', waiter_id=null
   /// 4. For each table, mark open orders as 'paid', set final total_cents, settled_id, closed_at
-  /// 5. Reset waiter shift_started_at for fresh start
-  /// Now tables no longer appear open for waiter, totals start from 0.00.
+  /// 5. Reset waiter shift_started_at for fresh start (totals bëhen 00)
   Future<void> settleWaiter({
     required int waiterId,
     required int startMs,
@@ -118,6 +122,7 @@ class SettlementsDao {
     required int cardCents,
     required int expectedCashCents,
     required int actualCashCents,
+    int premiumCents = 0,
     String? notes,
     required int settledBy,
   }) async {
@@ -132,6 +137,7 @@ class SettlementsDao {
         'card_cents': cardCents,
         'expected_cash_cents': expectedCashCents,
         'difference_cents': actualCashCents - expectedCashCents,
+        'premium_cents': premiumCents,
         'start_ms': startMs,
         'end_ms': endMs,
         'notes': notes,
@@ -152,14 +158,15 @@ class SettlementsDao {
         'SELECT id FROM dining_tables WHERE waiter_id = ? AND is_active = 1',
         [waiterId],
       );
+      // ignore: avoid_print
       print('Closing ${openTables.length} open tables for waiter $waiterId during settlement');
 
-      final nowClosedAt = nowMs; // consistent timestamp
+      final nowClosedAt = nowMs;
 
       for (final tableRow in openTables) {
         final tableId = tableRow['id'] as int;
 
-        // Close open orders for this table, set final totals and link to settlement
+        // Close open orders for this table
         final totalRows = await txn.rawQuery('''
           SELECT COALESCE(SUM(oi.line_total_cents), 0) AS total_cents
           FROM orders o
@@ -169,7 +176,6 @@ class SettlementsDao {
 
         final orderTotalCents = (totalRows.first['total_cents'] as num?)?.toInt() ?? 0;
 
-        // Update orders to 'paid' / settled
         await txn.update(
           'orders',
           {
@@ -182,7 +188,6 @@ class SettlementsDao {
           whereArgs: [tableId, waiterId],
         );
 
-        // Free the table
         await txn.update(
           'dining_tables',
           {'status': 'free', 'waiter_id': null},
@@ -191,7 +196,7 @@ class SettlementsDao {
         );
       }
 
-      // 4. Reset waiter shift for fresh start
+      // 4. Reset waiter shift for fresh start — totals bëhen 00
       await txn.update(
         'users',
         {'shift_started_at': nowMs},
@@ -201,4 +206,3 @@ class SettlementsDao {
     });
   }
 }
-
