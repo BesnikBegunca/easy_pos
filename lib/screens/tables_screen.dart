@@ -53,12 +53,12 @@ class _TablesScreenState extends State<TablesScreen> {
 
     await Navigator.of(context).push(
       PageRouteBuilder(
-        pageBuilder: (ctx, a, sec) => OrderScreen(
+        pageBuilder: (_, a, _2) => OrderScreen(
           tableId: t.id,
           tableName: t.name,
           waiterId: me.id,
         ),
-        transitionsBuilder: (ctx, a, sec, child) => FadeTransition(
+        transitionsBuilder: (_, a, _2, child) => FadeTransition(
           opacity: CurvedAnimation(parent: a, curve: Curves.easeOut),
           child: child,
         ),

@@ -46,12 +46,14 @@ class _WaiterSettlementScreenState extends State<WaiterSettlementScreen> {
   int get expectedCash => totals['expectedCash'] ?? 0;
 
   int get actualCash {
-    final value = double.tryParse(actualCashC.text.trim().replaceAll(',', '.')) ?? 0;
+    final value =
+        double.tryParse(actualCashC.text.trim().replaceAll(',', '.')) ?? 0;
     return (value * 100).round();
   }
 
   int get premiumCents {
-    final value = double.tryParse(premiumC.text.trim().replaceAll(',', '.')) ?? 0;
+    final value =
+        double.tryParse(premiumC.text.trim().replaceAll(',', '.')) ?? 0;
     return (value * 100).round();
   }
 
@@ -104,7 +106,9 @@ class _WaiterSettlementScreenState extends State<WaiterSettlementScreen> {
           'expectedCash': data['expectedCash'] ?? 0,
         };
 
-        actualCashC.text = moneyFromCents(expectedCash).replaceAll('€', '').trim();
+        actualCashC.text = moneyFromCents(
+          expectedCash,
+        ).replaceAll('€', '').trim();
       });
     } catch (e) {
       debugPrint('Error calculating totals: $e');
@@ -117,12 +121,7 @@ class _WaiterSettlementScreenState extends State<WaiterSettlementScreen> {
 
   void _resetUiAfterSettlement() {
     setState(() {
-      totals = const {
-        'total': 0,
-        'cash': 0,
-        'card': 0,
-        'expectedCash': 0,
-      };
+      totals = const {'total': 0, 'cash': 0, 'card': 0, 'expectedCash': 0};
       actualCashC.clear();
       premiumC.clear();
       notesC.clear();
@@ -345,7 +344,11 @@ class _WaiterSettlementScreenState extends State<WaiterSettlementScreen> {
         children: [
           Row(
             children: [
-              Icon(Icons.workspace_premium_outlined, color: Colors.amber.shade700, size: 20),
+              Icon(
+                Icons.workspace_premium_outlined,
+                color: Colors.amber.shade700,
+                size: 20,
+              ),
               const SizedBox(width: 8),
               Text(
                 'Premium / Bonus',
@@ -372,7 +375,9 @@ class _WaiterSettlementScreenState extends State<WaiterSettlementScreen> {
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(color: Colors.amber.withValues(alpha: 0.40)),
+                borderSide: BorderSide(
+                  color: Colors.amber.withValues(alpha: 0.40),
+                ),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
@@ -425,267 +430,274 @@ class _WaiterSettlementScreenState extends State<WaiterSettlementScreen> {
       body: loading
           ? const Center(child: CircularProgressIndicator())
           : waiters.isEmpty
-              ? const Center(child: Text('Nuk ka kamarjerë aktivë.'))
-              : SafeArea(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 950),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _sectionTitle('Zgjedh kamarjerin'),
-                            const SizedBox(height: 10),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 4,
+          ? const Center(child: Text('Nuk ka kamarjerë aktivë.'))
+          : SafeArea(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 950),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _sectionTitle('Zgjedh kamarjerin'),
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppTheme.tile,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: AppTheme.borderColor),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.04),
+                                blurRadius: 16,
+                                offset: const Offset(0, 8),
                               ),
-                              decoration: BoxDecoration(
-                                color: AppTheme.tile,
-                                borderRadius: BorderRadius.circular(18),
-                                border: Border.all(color: AppTheme.borderColor),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.04),
-                                    blurRadius: 16,
-                                    offset: const Offset(0, 8),
-                                  ),
-                                ],
-                              ),
-                              child: DropdownButton<AppUserRow>(
-                                value: selectedWaiter,
-                                hint: const Text('Choose a waiter'),
-                                isExpanded: true,
-                                underline: const SizedBox(),
-                                borderRadius: BorderRadius.circular(16),
-                                dropdownColor: AppTheme.surface,
-                                icon: const Icon(Icons.keyboard_arrow_down_rounded),
-                                items: waiters.map((w) {
-                                  final name = _waiterName(w);
+                            ],
+                          ),
+                          child: DropdownButton<AppUserRow>(
+                            value: selectedWaiter,
+                            hint: const Text('Choose a waiter'),
+                            isExpanded: true,
+                            underline: const SizedBox(),
+                            borderRadius: BorderRadius.circular(16),
+                            dropdownColor: AppTheme.surface,
+                            icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                            items: waiters.map((w) {
+                              final name = _waiterName(w);
 
-                                  return DropdownMenuItem<AppUserRow>(
-                                    value: w,
-                                    child: Row(
-                                      children: [
-                                        CircleAvatar(
-                                          radius: 18,
-                                          backgroundColor:
-                                              AppTheme.primary.withOpacity(0.12),
-                                          child: Text(
-                                            name.isNotEmpty ? name[0].toUpperCase() : 'W',
-                                            style: TextStyle(
-                                              color: AppTheme.primary,
-                                              fontWeight: FontWeight.w800,
-                                            ),
-                                          ),
+                              return DropdownMenuItem<AppUserRow>(
+                                value: w,
+                                child: Row(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 18,
+                                      backgroundColor: AppTheme.primary
+                                          .withOpacity(0.12),
+                                      child: Text(
+                                        name.isNotEmpty
+                                            ? name[0].toUpperCase()
+                                            : 'W',
+                                        style: TextStyle(
+                                          color: AppTheme.primary,
+                                          fontWeight: FontWeight.w800,
                                         ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: Text(
-                                            name,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: AppTheme.bodyMedium.copyWith(
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
+                                      ),
                                     ),
-                                  );
-                                }).toList(),
-                                onChanged: (w) async {
-                                  setState(() {
-                                    selectedWaiter = w;
-                                    totals = const {};
-                                    actualCashC.clear();
-                                    premiumC.clear();
-                                    notesC.clear();
-                                  });
-
-                                  await _calculateTotals();
-                                },
-                              ),
-                            ),
-                            if (selectedWaiter != null) ...[
-                              const SizedBox(height: 18),
-                              Text(
-                                selectedWaiter!.shiftStartedAt == null
-                                    ? 'Ky waiter ende nuk ka shift aktiv. Nëse llogaritja del 0.00, settlement mbyllet pa mbetje.'
-                                    : 'Settlement po llogaritet vetëm për shiftin aktual dhe vetëm për pjesën e pabara settle.',
-                                style: AppTheme.bodySmall.copyWith(
-                                  color: AppTheme.textSecondary,
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              SizedBox(
-                                width: double.infinity,
-                                child: OutlinedButton.icon(
-                                  onPressed: _calculateTotals,
-                                  icon: const Icon(Icons.calculate_outlined),
-                                  label: const Text('Llogarit totalet'),
-                                ),
-                              ),
-                              const SizedBox(height: 20),
-                              GridView.count(
-                                crossAxisCount:
-                                    MediaQuery.of(context).size.width < 700 ? 1 : 2,
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                mainAxisSpacing: 12,
-                                crossAxisSpacing: 12,
-                                childAspectRatio:
-                                    MediaQuery.of(context).size.width < 700 ? 3.8 : 2.8,
-                                children: [
-                                  _statCard(
-                                    title: 'Total Sales',
-                                    value: moneyFromCents(total),
-                                    icon: Icons.receipt_long_outlined,
-                                    tint: Colors.blue,
-                                  ),
-                                  _statCard(
-                                    title: 'Cash Payments',
-                                    value: moneyFromCents(cash),
-                                    icon: Icons.payments_outlined,
-                                    tint: Colors.green,
-                                  ),
-                                  _statCard(
-                                    title: 'Card / Mixed Payments',
-                                    value: moneyFromCents(card),
-                                    icon: Icons.credit_card_outlined,
-                                    tint: Colors.deepPurple,
-                                  ),
-                                  _statCard(
-                                    title: 'Expected Cash',
-                                    value: moneyFromCents(expectedCash),
-                                    icon: Icons.account_balance_wallet_outlined,
-                                    tint: Colors.orange,
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 18),
-                              Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(18),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.tile,
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(color: AppTheme.borderColor),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.05),
-                                      blurRadius: 18,
-                                      offset: const Offset(0, 10),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        name,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: AppTheme.bodyMedium.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
                                     ),
                                   ],
                                 ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Settlement Summary for ${_waiterName(selectedWaiter!)}',
-                                      style: AppTheme.titleSmall.copyWith(
+                              );
+                            }).toList(),
+                            onChanged: (w) async {
+                              setState(() {
+                                selectedWaiter = w;
+                                totals = const {};
+                                actualCashC.clear();
+                                premiumC.clear();
+                                notesC.clear();
+                              });
+
+                              await _calculateTotals();
+                            },
+                          ),
+                        ),
+                        if (selectedWaiter != null) ...[
+                          const SizedBox(height: 18),
+                          Text(
+                            selectedWaiter!.shiftStartedAt == null
+                                ? 'Ky waiter ende nuk ka shift aktiv. Nëse llogaritja del 0.00, settlement mbyllet pa mbetje.'
+                                : 'Settlement po llogaritet vetëm për shiftin aktual dhe vetëm për pjesën e pabara settle.',
+                            style: AppTheme.bodySmall.copyWith(
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: _calculateTotals,
+                              icon: const Icon(Icons.calculate_outlined),
+                              label: const Text('Llogarit totalet'),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          GridView.count(
+                            crossAxisCount:
+                                MediaQuery.of(context).size.width < 700 ? 1 : 2,
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            mainAxisSpacing: 12,
+                            crossAxisSpacing: 12,
+                            childAspectRatio:
+                                MediaQuery.of(context).size.width < 700
+                                ? 3.8
+                                : 2.8,
+                            children: [
+                              _statCard(
+                                title: 'Total Sales',
+                                value: moneyFromCents(total),
+                                icon: Icons.receipt_long_outlined,
+                                tint: Colors.blue,
+                              ),
+                              _statCard(
+                                title: 'Cash Payments',
+                                value: moneyFromCents(cash),
+                                icon: Icons.payments_outlined,
+                                tint: Colors.green,
+                              ),
+                              _statCard(
+                                title: 'Card / Mixed Payments',
+                                value: moneyFromCents(card),
+                                icon: Icons.credit_card_outlined,
+                                tint: Colors.deepPurple,
+                              ),
+                              _statCard(
+                                title: 'Expected Cash',
+                                value: moneyFromCents(expectedCash),
+                                icon: Icons.account_balance_wallet_outlined,
+                                tint: Colors.orange,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 18),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(18),
+                            decoration: BoxDecoration(
+                              color: AppTheme.tile,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: AppTheme.borderColor),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.05),
+                                  blurRadius: 18,
+                                  offset: const Offset(0, 10),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Settlement Summary for ${_waiterName(selectedWaiter!)}',
+                                  style: AppTheme.titleSmall.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                const SizedBox(height: 14),
+                                _summaryRow('Total Sales', total),
+                                _summaryRow('Cash Payments', cash),
+                                _summaryRow('Card / Mixed Payments', card),
+                                const Divider(height: 26),
+                                _summaryRow(
+                                  'Expected Cash',
+                                  expectedCash,
+                                  valueColor: AppTheme.primary,
+                                ),
+                                if (premiumCents > 0)
+                                  _summaryRow(
+                                    'Premium / Bonus',
+                                    premiumCents,
+                                    valueColor: Colors.amber.shade700,
+                                  ),
+                                const SizedBox(height: 16),
+                                TextField(
+                                  controller: actualCashC,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                  onChanged: (_) => setState(() {}),
+                                  decoration: InputDecoration(
+                                    labelText: 'Actual Cash Counted (€)',
+                                    hintText: 'Shkruaj shumën reale të cash-it',
+                                    prefixIcon: const Icon(Icons.euro_outlined),
+                                    filled: true,
+                                    fillColor: AppTheme.surface,
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: BorderSide(
+                                        color: AppTheme.borderColor,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 14),
+                                _differenceCard(),
+                                const SizedBox(height: 14),
+                                _premiumCard(),
+                                const SizedBox(height: 14),
+                                TextField(
+                                  controller: notesC,
+                                  maxLines: 3,
+                                  decoration: InputDecoration(
+                                    labelText: 'Notes (optional)',
+                                    hintText: 'Shënim shtesë për settlement',
+                                    prefixIcon: const Padding(
+                                      padding: EdgeInsets.only(bottom: 48),
+                                      child: Icon(Icons.notes_outlined),
+                                    ),
+                                    filled: true,
+                                    fillColor: AppTheme.surface,
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: BorderSide(
+                                        color: AppTheme.borderColor,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 18),
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 54,
+                                  child: ElevatedButton.icon(
+                                    onPressed: settling ? null : _settle,
+                                    icon: Icon(
+                                      settling
+                                          ? Icons.hourglass_top_rounded
+                                          : Icons.verified_outlined,
+                                    ),
+                                    label: Text(
+                                      settling
+                                          ? 'DUKE RUJT...'
+                                          : 'KRYEJ SETTLEMENT',
+                                      style: const TextStyle(
                                         fontWeight: FontWeight.w800,
                                       ),
                                     ),
-                                    const SizedBox(height: 14),
-                                    _summaryRow('Total Sales', total),
-                                    _summaryRow('Cash Payments', cash),
-                                    _summaryRow('Card / Mixed Payments', card),
-                                    const Divider(height: 26),
-                                    _summaryRow(
-                                      'Expected Cash',
-                                      expectedCash,
-                                      valueColor: AppTheme.primary,
-                                    ),
-                                    if (premiumCents > 0)
-                                      _summaryRow(
-                                        'Premium / Bonus',
-                                        premiumCents,
-                                        valueColor: Colors.amber.shade700,
-                                      ),
-                                    const SizedBox(height: 16),
-                                    TextField(
-                                      controller: actualCashC,
-                                      keyboardType: const TextInputType.numberWithOptions(
-                                        decimal: true,
-                                      ),
-                                      onChanged: (_) => setState(() {}),
-                                      decoration: InputDecoration(
-                                        labelText: 'Actual Cash Counted (€)',
-                                        hintText: 'Shkruaj shumën reale të cash-it',
-                                        prefixIcon: const Icon(Icons.euro_outlined),
-                                        filled: true,
-                                        fillColor: AppTheme.surface,
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(16),
-                                        ),
-                                        enabledBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(16),
-                                          borderSide: BorderSide(
-                                            color: AppTheme.borderColor,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 14),
-                                    _differenceCard(),
-                                    const SizedBox(height: 14),
-                                    _premiumCard(),
-                                    const SizedBox(height: 14),
-                                    TextField(
-                                      controller: notesC,
-                                      maxLines: 3,
-                                      decoration: InputDecoration(
-                                        labelText: 'Notes (optional)',
-                                        hintText: 'Shënim shtesë për settlement',
-                                        prefixIcon: const Padding(
-                                          padding: EdgeInsets.only(bottom: 48),
-                                          child: Icon(Icons.notes_outlined),
-                                        ),
-                                        filled: true,
-                                        fillColor: AppTheme.surface,
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(16),
-                                        ),
-                                        enabledBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(16),
-                                          borderSide: BorderSide(
-                                            color: AppTheme.borderColor,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 18),
-                                    SizedBox(
-                                      width: double.infinity,
-                                      height: 54,
-                                      child: ElevatedButton.icon(
-                                        onPressed: settling ? null : _settle,
-                                        icon: Icon(
-                                          settling
-                                              ? Icons.hourglass_top_rounded
-                                              : Icons.verified_outlined,
-                                        ),
-                                        label: Text(
-                                          settling ? 'DUKE RUJT...' : 'KRYEJ SETTLEMENT',
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ),
+              ),
+            ),
     );
   }
 }
