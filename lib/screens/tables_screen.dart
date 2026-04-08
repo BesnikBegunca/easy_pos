@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../data/dao_tables.dart';
 import '../auth/session.dart';
@@ -13,39 +15,132 @@ class TablesScreen extends StatefulWidget {
   State<TablesScreen> createState() => _TablesScreenState();
 }
 
-class _TablesScreenState extends State<TablesScreen> {
-  late Future<List<FullTableRow>> _future;
+class _TablesScreenState extends State<TablesScreen>
+    with WidgetsBindingObserver {
+  final StreamController<List<FullTableRow>> _tablesController =
+      StreamController<List<FullTableRow>>.broadcast();
+
+  Timer? _pollTimer;
+  bool _isLoading = false;
+  bool _didSeedTables = false;
+  String _lastFingerprint = '';
+
+  Stream<List<FullTableRow>> get _stream => _tablesController.stream;
 
   @override
   void initState() {
     super.initState();
-    _future = _load();
+    WidgetsBinding.instance.addObserver(this);
+    _startRealtimeRefresh();
   }
 
-  Future<List<FullTableRow>> _load() async {
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _pollTimer?.cancel();
+    _tablesController.close();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _reloadNow(forceEmit: true);
+      _restartPolling();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
+      _pollTimer?.cancel();
+    }
+  }
+
+  void _startRealtimeRefresh() {
+    _reloadNow(forceEmit: true);
+    _restartPolling();
+  }
+
+  void _restartPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(
+      const Duration(milliseconds: 700),
+      (_) => _reloadNow(),
+    );
+  }
+
+  Future<List<FullTableRow>> _loadTables() async {
     final me = Session.I.current!;
     var tables = await TablesDao.I.listTablesWithWaiters(ownerId: me.id);
-    if (tables.isEmpty) {
+
+    if (tables.isEmpty && !_didSeedTables) {
+      _didSeedTables = true;
       for (int i = 1; i <= 20; i++) {
         await TablesDao.I.addTable('Tavolina $i', ownerId: me.id);
       }
       tables = await TablesDao.I.listTablesWithWaiters(ownerId: me.id);
     }
+
     return tables;
   }
 
-  void _refresh() => setState(() => _future = _load());
+  String _buildFingerprint(List<FullTableRow> tables) {
+    return tables
+        .map(
+          (t) =>
+              '${t.id}|${t.name}|${t.isOpen}|${t.waiterId}|${t.waiterName}|${t.openTotalCents}',
+        )
+        .join('||');
+  }
+
+  Future<void> _reloadNow({bool forceEmit = false}) async {
+    if (_isLoading || _tablesController.isClosed) return;
+
+    _isLoading = true;
+    try {
+      final tables = await _loadTables();
+      final fingerprint = _buildFingerprint(tables);
+
+      if (forceEmit || fingerprint != _lastFingerprint) {
+        _lastFingerprint = fingerprint;
+        if (!_tablesController.isClosed) {
+          _tablesController.add(tables);
+        }
+      }
+    } catch (e, st) {
+      if (!_tablesController.isClosed) {
+        _tablesController.addError(e, st);
+      }
+    } finally {
+      _isLoading = false;
+    }
+  }
+
+  Future<void> _refresh() async {
+    await _reloadNow(forceEmit: true);
+  }
 
   Future<void> _openTable(FullTableRow t) async {
     final me = Session.I.current!;
 
-    if (t.isOpen && t.waiterId != null && t.waiterId != me.id) {
+    await _reloadNow(forceEmit: true);
+
+    FullTableRow currentTable = t;
+    try {
+      final latestTables = await _loadTables();
+      final found = latestTables.where((x) => x.id == t.id);
+      if (found.isNotEmpty) {
+        currentTable = found.first;
+      }
+    } catch (_) {}
+
+    if (currentTable.isOpen &&
+        currentTable.waiterId != null &&
+        currentTable.waiterId != me.id) {
       await showDialog<void>(
         context: context,
         builder: (_) => _PremiumInfoDialog(
-          title: t.name,
+          title: currentTable.name,
           message:
-              'Kjo tavolinë është e hapur nga ${t.waiterName ?? "kamarier tjetër"}.',
+              'Kjo tavolinë është e hapur nga ${currentTable.waiterName ?? "kamarier tjetër"}.',
         ),
       );
       return;
@@ -53,26 +148,28 @@ class _TablesScreenState extends State<TablesScreen> {
 
     await Navigator.of(context).push(
       PageRouteBuilder(
-        pageBuilder: (_, a, _2) => OrderScreen(
-          tableId: t.id,
-          tableName: t.name,
+        pageBuilder: (ctx, a, sec) => OrderScreen(
+          tableId: currentTable.id,
+          tableName: currentTable.name,
           waiterId: me.id,
         ),
-        transitionsBuilder: (_, a, _2, child) => FadeTransition(
+        transitionsBuilder: (ctx, a, sec, child) => FadeTransition(
           opacity: CurvedAnimation(parent: a, curve: Curves.easeOut),
           child: child,
         ),
         transitionDuration: const Duration(milliseconds: 250),
       ),
     );
-    if (mounted) { _refresh(); }
+
+    if (!mounted) return;
+    await _reloadNow(forceEmit: true);
   }
 
   Future<void> _addTableDialog() async {
     final me = Session.I.current!;
-    final tables =
-        await TablesDao.I.listTablesWithWaiters(ownerId: me.id);
-    if (!mounted) { return; }
+    final tables = await TablesDao.I.listTablesWithWaiters(ownerId: me.id);
+    if (!mounted) return;
+
     final nextNum = tables.length + 1;
     final nameC = TextEditingController(text: 'Tavolina $nextNum');
 
@@ -81,14 +178,16 @@ class _TablesScreenState extends State<TablesScreen> {
           builder: (_) => AlertDialog(
             backgroundColor: AppTheme.surface,
             shape: RoundedRectangleBorder(
-                borderRadius: AppTheme.radiusLarge),
+              borderRadius: AppTheme.radiusLarge,
+            ),
             title: Row(
               children: [
                 IconBadge(
-                    icon: Icons.add_rounded,
-                    color: AppTheme.primary,
-                    size: 36,
-                    iconSize: 18),
+                  icon: Icons.add_rounded,
+                  color: AppTheme.primary,
+                  size: 36,
+                  iconSize: 18,
+                ),
                 const SizedBox(width: 12),
                 const Text('Shto Tavolinë', style: AppTheme.titleSmall),
               ],
@@ -101,8 +200,10 @@ class _TablesScreenState extends State<TablesScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: Text('Anulo',
-                    style: TextStyle(color: AppTheme.textSecondary)),
+                child: Text(
+                  'Anulo',
+                  style: TextStyle(color: AppTheme.textSecondary),
+                ),
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
@@ -110,11 +211,14 @@ class _TablesScreenState extends State<TablesScreen> {
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
-                      borderRadius: AppTheme.radiusSmall),
+                    borderRadius: AppTheme.radiusSmall,
+                  ),
                 ),
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('Shto',
-                    style: TextStyle(fontWeight: FontWeight.w700)),
+                child: const Text(
+                  'Shto',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
               ),
             ],
           ),
@@ -123,53 +227,66 @@ class _TablesScreenState extends State<TablesScreen> {
 
     final name = nameC.text.trim();
     nameC.dispose();
-    if (!ok || name.isEmpty || !mounted) { return; }
+
+    if (!ok || name.isEmpty || !mounted) return;
+
     await TablesDao.I.addTable(name, ownerId: me.id);
-    _refresh();
+    await _reloadNow(forceEmit: true);
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<FullTableRow>>(
-      future: _future,
+    return StreamBuilder<List<FullTableRow>>(
+      stream: _stream,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
           return _buildLoading();
         }
-        if (snapshot.hasError) {
+
+        if (snapshot.hasError && !snapshot.hasData) {
           return _buildError();
         }
 
         final tables = snapshot.data ?? [];
         final openCount = tables.where((t) => t.isOpen).length;
         final totalBilling = tables.fold<int>(
-            0, (s, t) => s + t.openTotalCents);
+          0,
+          (s, t) => s + t.openTotalCents,
+        );
 
         return Column(
           children: [
-            // ── Stats bar ───────────────────────────────────────────────────
             _buildStatsBar(tables.length, openCount, totalBilling),
-            // ── Table grid ──────────────────────────────────────────────────
             Expanded(
-              child: GridView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                gridDelegate:
-                    const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 5,
-                  crossAxisSpacing: 10,
-                  mainAxisSpacing: 10,
-                  childAspectRatio: 1.05,
+              child: RefreshIndicator(
+                onRefresh: _refresh,
+                child: GridView.builder(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                  gridDelegate:
+                      const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 5,
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 10,
+                    childAspectRatio: 1.05,
+                  ),
+                  itemCount: tables.length + 1,
+                  itemBuilder: (_, i) {
+                    if (i == tables.length) {
+                      return _AddTableTile(onTap: _addTableDialog);
+                    }
+
+                    final table = tables[i];
+                    return _PremiumTableCard(
+                      key: ValueKey(
+                        '${table.id}-${table.isOpen}-${table.waiterId}-${table.openTotalCents}',
+                      ),
+                      table: table,
+                      onTap: () => _openTable(table),
+                    );
+                  },
                 ),
-                itemCount: tables.length + 1,
-                itemBuilder: (_, i) {
-                  if (i == tables.length) {
-                    return _AddTableTile(onTap: _addTableDialog);
-                  }
-                  return _PremiumTableCard(
-                    table: tables[i],
-                    onTap: () => _openTable(tables[i]),
-                  );
-                },
               ),
             ),
           ],
@@ -179,7 +296,10 @@ class _TablesScreenState extends State<TablesScreen> {
   }
 
   Widget _buildStatsBar(
-      int total, int open, int totalBillingCents) {
+    int total,
+    int open,
+    int totalBillingCents,
+  ) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: BoxDecoration(
@@ -211,18 +331,25 @@ class _TablesScreenState extends State<TablesScreen> {
           const Spacer(),
           if (totalBillingCents > 0) ...[
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 7,
+              ),
               decoration: BoxDecoration(
                 gradient: AppTheme.warningGrad,
                 borderRadius: BorderRadius.circular(999),
-                boxShadow: AppTheme.shadowGlowColor(AppTheme.warning,
-                    a: 0.30),
+                boxShadow: AppTheme.shadowGlowColor(
+                  AppTheme.warning,
+                  a: 0.30,
+                ),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.receipt_rounded,
-                      color: Colors.white, size: 14),
+                  const Icon(
+                    Icons.receipt_rounded,
+                    color: Colors.white,
+                    size: 14,
+                  ),
                   const SizedBox(width: 6),
                   Text(
                     moneyFromCents(totalBillingCents),
@@ -237,7 +364,6 @@ class _TablesScreenState extends State<TablesScreen> {
             ),
             const SizedBox(width: 8),
           ],
-          // Refresh
           InkWell(
             borderRadius: BorderRadius.circular(10),
             onTap: _refresh,
@@ -248,8 +374,11 @@ class _TablesScreenState extends State<TablesScreen> {
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: AppTheme.border),
               ),
-              child: const Icon(Icons.refresh_rounded,
-                  color: AppTheme.textSecondary, size: 16),
+              child: const Icon(
+                Icons.refresh_rounded,
+                color: AppTheme.textSecondary,
+                size: 16,
+              ),
             ),
           ),
         ],
@@ -263,7 +392,8 @@ class _TablesScreenState extends State<TablesScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            width: 56, height: 56,
+            width: 56,
+            height: 56,
             decoration: BoxDecoration(
               color: AppTheme.primary.withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(16),
@@ -271,12 +401,16 @@ class _TablesScreenState extends State<TablesScreen> {
             child: const Padding(
               padding: EdgeInsets.all(14),
               child: CircularProgressIndicator(
-                color: AppTheme.primary, strokeWidth: 2.5),
+                color: AppTheme.primary,
+                strokeWidth: 2.5,
+              ),
             ),
           ),
           const SizedBox(height: 16),
-          const Text('Duke ngarkuar tavolinat…',
-              style: AppTheme.bodySmall),
+          const Text(
+            'Duke ngarkuar tavolinat…',
+            style: AppTheme.bodySmall,
+          ),
         ],
       ),
     );
@@ -288,25 +422,28 @@ class _TablesScreenState extends State<TablesScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const IconBadge(
-              icon: Icons.error_outline_rounded,
-              color: AppTheme.error,
-              size: 56,
-              iconSize: 28),
+            icon: Icons.error_outline_rounded,
+            color: AppTheme.error,
+            size: 56,
+            iconSize: 28,
+          ),
           const SizedBox(height: 16),
-          const Text('Gabim në ngarkimin e tavolinave',
-              style: AppTheme.titleSmall),
+          const Text(
+            'Gabim në ngarkimin e tavolinave',
+            style: AppTheme.titleSmall,
+          ),
           const SizedBox(height: 20),
           AppPrimaryButton(
-              label: 'Provo Përsëri',
-              icon: Icons.refresh_rounded,
-              onPressed: _refresh),
+            label: 'Provo Përsëri',
+            icon: Icons.refresh_rounded,
+            onPressed: _refresh,
+          ),
         ],
       ),
     );
   }
 }
 
-// ── Stat chip ─────────────────────────────────────────────────────────────────
 class _StatChip extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -348,12 +485,15 @@ class _StatChip extends StatelessWidget {
   }
 }
 
-// ── Premium table card ────────────────────────────────────────────────────────
 class _PremiumTableCard extends StatelessWidget {
   final FullTableRow table;
   final VoidCallback onTap;
 
-  const _PremiumTableCard({required this.table, required this.onTap});
+  const _PremiumTableCard({
+    super.key,
+    required this.table,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -380,7 +520,10 @@ class _PremiumTableCard extends StatelessWidget {
                       const Color(0xFF1C1500),
                       AppTheme.card,
                     ]
-                  : [AppTheme.cardAlt, AppTheme.card],
+                  : [
+                      AppTheme.cardAlt,
+                      AppTheme.card,
+                    ],
             ),
             borderRadius: AppTheme.borderRadius,
             border: Border.all(
@@ -396,12 +539,12 @@ class _PremiumTableCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Icon + status badge
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    width: 30, height: 30,
+                    width: 30,
+                    height: 30,
                     decoration: BoxDecoration(
                       color: statusColor.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(8),
@@ -415,12 +558,12 @@ class _PremiumTableCard extends StatelessWidget {
                     ),
                   ),
                   const Spacer(),
-                  // Live dot for occupied
                   if (occupied)
                     LiveDot(color: AppTheme.warning, size: 7)
                   else
                     Container(
-                      width: 7, height: 7,
+                      width: 7,
+                      height: 7,
                       decoration: BoxDecoration(
                         color: AppTheme.textMuted,
                         shape: BoxShape.circle,
@@ -428,30 +571,24 @@ class _PremiumTableCard extends StatelessWidget {
                     ),
                 ],
               ),
-
               const Spacer(),
-
-              // Table name
               Text(
                 table.name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppTheme.titleSmall.copyWith(fontSize: 12),
               ),
-
               const SizedBox(height: 4),
-
-              // Status badge
               StatusBadge(label: statusLabel, color: statusColor),
-
-              // Waiter name
               if (occupied && table.waiterName != null) ...[
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    Icon(Icons.person_outline_rounded,
-                        size: 9,
-                        color: AppTheme.textSecondary),
+                    Icon(
+                      Icons.person_outline_rounded,
+                      size: 9,
+                      color: AppTheme.textSecondary,
+                    ),
                     const SizedBox(width: 3),
                     Expanded(
                       child: Text(
@@ -464,8 +601,6 @@ class _PremiumTableCard extends StatelessWidget {
                   ],
                 ),
               ],
-
-              // Total billing
               if (occupied && table.openTotalCents > 0) ...[
                 const SizedBox(height: 5),
                 Text(
@@ -485,7 +620,6 @@ class _PremiumTableCard extends StatelessWidget {
   }
 }
 
-// ── Add table tile ────────────────────────────────────────────────────────────
 class _AddTableTile extends StatelessWidget {
   final VoidCallback onTap;
   const _AddTableTile({required this.onTap});
@@ -511,7 +645,8 @@ class _AddTableTile extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: 36, height: 36,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
                   color: AppTheme.primary.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
@@ -539,11 +674,14 @@ class _AddTableTile extends StatelessWidget {
   }
 }
 
-// ── Info dialog ───────────────────────────────────────────────────────────────
 class _PremiumInfoDialog extends StatelessWidget {
   final String title;
   final String message;
-  const _PremiumInfoDialog({required this.title, required this.message});
+
+  const _PremiumInfoDialog({
+    required this.title,
+    required this.message,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -553,10 +691,11 @@ class _PremiumInfoDialog extends StatelessWidget {
       title: Row(
         children: [
           const IconBadge(
-              icon: Icons.info_outline_rounded,
-              color: AppTheme.info,
-              size: 36,
-              iconSize: 18),
+            icon: Icons.info_outline_rounded,
+            color: AppTheme.info,
+            size: 36,
+            iconSize: 18,
+          ),
           const SizedBox(width: 12),
           Text(title, style: AppTheme.titleSmall),
         ],
@@ -568,11 +707,15 @@ class _PremiumInfoDialog extends StatelessWidget {
             backgroundColor: AppTheme.primary,
             foregroundColor: Colors.white,
             elevation: 0,
-            shape:
-                RoundedRectangleBorder(borderRadius: AppTheme.radiusSmall),
+            shape: RoundedRectangleBorder(
+              borderRadius: AppTheme.radiusSmall,
+            ),
           ),
           onPressed: () => Navigator.pop(context),
-          child: const Text('OK', style: TextStyle(fontWeight: FontWeight.w700)),
+          child: const Text(
+            'OK',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
         ),
       ],
     );
