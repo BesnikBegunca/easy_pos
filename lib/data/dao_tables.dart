@@ -132,14 +132,25 @@ class TablesDao {
     return data;
   }
 
-  Future<int> addTable(String name, {int? waiterId}) async {
+  Future<int> addTable(String name, {int? waiterId, int? ownerId}) async {
     final db = await AppDb.I.db;
     return db.insert('dining_tables', {
       'name': name.trim().isEmpty ? 'Tavolina' : name.trim(),
       'waiter_id': waiterId,
+      'owner_id': ownerId,
       'is_active': 1,
       'created_at': DateTime.now().millisecondsSinceEpoch,
     });
+  }
+
+  /// Numëron tavolinat që i përkasin një pronari (owner_id)
+  Future<int> countTablesForOwner(int ownerId) async {
+    final db = await AppDb.I.db;
+    final rows = await db.rawQuery(
+      'SELECT COUNT(*) AS c FROM dining_tables WHERE owner_id = ? AND is_active = 1',
+      [ownerId],
+    );
+    return (rows.first['c'] as num?)?.toInt() ?? 0;
   }
 
   Future<void> assignTableToWaiter(int tableId, int waiterId) async {
@@ -290,8 +301,10 @@ class TablesDao {
     });
   }
 
-  Future<List<FullTableRow>> listTablesWithWaiters() async {
+  Future<List<FullTableRow>> listTablesWithWaiters({int? ownerId}) async {
     final db = await AppDb.I.db;
+    final String ownerFilter =
+        ownerId != null ? 'AND dt.owner_id = $ownerId' : '';
     final rows = await db.rawQuery('''
       SELECT
         dt.id, dt.name, dt.status, dt.waiter_id,
@@ -304,7 +317,7 @@ class TablesDao {
         ), 0) AS open_total
       FROM dining_tables dt
       LEFT JOIN users u ON u.id = dt.waiter_id
-      WHERE dt.is_active = 1
+      WHERE dt.is_active = 1 $ownerFilter
       ORDER BY dt.id ASC
     ''');
     return rows
@@ -317,6 +330,12 @@ class TablesDao {
               openTotalCents: (r['open_total'] as int?) ?? 0,
             ))
         .toList();
+  }
+
+  /// Kthen vetëm tavolinat e hapura (me porosi aktive) — për admin
+  Future<List<FullTableRow>> listOpenTables() async {
+    final all = await listTablesWithWaiters();
+    return all.where((t) => t.isOpen).toList();
   }
 
   /// Nëse don me dit sa HERË është hap një tavolinë gjatë shift-it

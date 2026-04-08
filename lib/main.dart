@@ -22,7 +22,7 @@ class App extends StatelessWidget {
         useMaterial3: true,
         colorScheme: ColorScheme.dark(
           primary: AppTheme.primary,
-          secondary: AppTheme.secondary,
+          secondary: AppTheme.violet,
         ),
         primaryColor: AppTheme.primary,
         scaffoldBackgroundColor: AppTheme.background,

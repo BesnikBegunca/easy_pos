@@ -2,7 +2,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-const int kDbVersion = 12;
+const int kDbVersion = 13;
 
 class AppDb {
   AppDb._();
@@ -128,6 +128,14 @@ CREATE TABLE IF NOT EXISTS printed_sales(
             } catch (_) {}
           }
 
+          if (oldV < 13) {
+            try {
+              await db.execute(
+                'ALTER TABLE dining_tables ADD COLUMN owner_id INTEGER',
+              );
+            } catch (_) {}
+          }
+
           await _createAll(db);
           await _seedDefaults(db);
         },
@@ -178,6 +186,7 @@ CREATE TABLE IF NOT EXISTS dining_tables(
   name TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'free', -- free/open/paid
   waiter_id INTEGER,
+  owner_id INTEGER,
   is_active INTEGER NOT NULL DEFAULT 1,
   created_at INTEGER NOT NULL
 );
@@ -415,6 +424,17 @@ CREATE TABLE IF NOT EXISTS printed_sales(
         print('Added missing column `waiter_id` to dining_tables');
       } catch (e) {
         print('Failed to add `waiter_id`: $e');
+      }
+    }
+
+    if (!dtCols.contains('owner_id')) {
+      try {
+        await db.execute(
+          "ALTER TABLE dining_tables ADD COLUMN owner_id INTEGER",
+        );
+        print('Added missing column `owner_id` to dining_tables');
+      } catch (e) {
+        print('Failed to add `owner_id`: $e');
       }
     }
 
