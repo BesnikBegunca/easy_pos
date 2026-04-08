@@ -86,7 +86,7 @@ class _TablesScreenState extends State<TablesScreen>
     return tables
         .map(
           (t) =>
-              '${t.id}|${t.name}|${t.isOpen}|${t.waiterId}|${t.waiterName}|${t.openTotalCents}',
+              '${t.id}|${t.name}|${t.waiterId}|${t.waiterName}|${t.openTotalCents}',
         )
         .join('||');
   }
@@ -249,7 +249,7 @@ class _TablesScreenState extends State<TablesScreen>
         }
 
         final tables = snapshot.data ?? [];
-        final openCount = tables.where((t) => t.isOpen).length;
+        final openCount = tables.where((t) => t.openTotalCents > 0).length;
         final totalBilling = tables.fold<int>(
           0,
           (s, t) => s + t.openTotalCents,
@@ -497,7 +497,7 @@ class _PremiumTableCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final occupied = table.isOpen;
+    final occupied = table.openTotalCents > 0;
     final Color statusColor =
         occupied ? AppTheme.warning : AppTheme.textMuted;
     final String statusLabel = occupied ? 'E HAPUR' : 'E LIRË';
