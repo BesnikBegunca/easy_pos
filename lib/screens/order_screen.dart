@@ -52,29 +52,40 @@ class _OrderScreenState extends State<OrderScreen> {
   }
 
   Future<void> _init() async {
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       _orderId = await OrdersDao.I.getOrCreateOpenOrder(
         tableId: widget.tableId,
         waiterId: widget.waiterId,
       );
       _categories = await ProductsDao.I.listCategories();
-      _selectedCategoryId =
-          _categories.isEmpty ? null : _categories.first.id;
+      _selectedCategoryId = _categories.isEmpty ? null : _categories.first.id;
       await Future.wait([_reloadProducts(), _refreshCart()]);
     } catch (e) {
       _error = e.toString();
     } finally {
-      if (mounted) { setState(() => _loading = false); }
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
   Future<void> _refreshCart() async {
-    if (_orderId == 0) { return; }
+    if (_orderId == 0) {
+      return;
+    }
     final lines = await OrdersDao.I.getOrderLines(_orderId);
     final total = await OrdersDao.I.getOrderTotalCents(_orderId);
-    if (!mounted) { return; }
-    setState(() { _lines = lines; _totalCents = total; });
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _lines = lines;
+      _totalCents = total;
+    });
   }
 
   Future<void> _reloadProducts() async {
@@ -82,7 +93,9 @@ class _OrderScreenState extends State<OrderScreen> {
       categoryId: _selectedCategoryId,
       search: _searchC.text,
     );
-    if (!mounted) { return; }
+    if (!mounted) {
+      return;
+    }
     setState(() => _products = prods);
   }
 
@@ -96,49 +109,83 @@ class _OrderScreenState extends State<OrderScreen> {
   }
 
   Future<void> _incrementLine(OrderLine line) async {
-    if (_busy.contains(line.itemId)) { return; }
+    if (_busy.contains(line.itemId)) {
+      return;
+    }
     setState(() => _busy.add(line.itemId));
     try {
       await OrdersDao.I.setItemQty(
-          itemId: line.itemId, orderId: _orderId, newQty: line.qty + 1);
+        itemId: line.itemId,
+        orderId: _orderId,
+        newQty: line.qty + 1,
+      );
       await _refreshCart();
     } finally {
-      if (mounted) { setState(() => _busy.remove(line.itemId)); }
+      if (mounted) {
+        setState(() => _busy.remove(line.itemId));
+      }
     }
   }
 
   Future<void> _decrementLine(OrderLine line) async {
-    if (_busy.contains(line.itemId)) { return; }
+    if (_busy.contains(line.itemId)) {
+      return;
+    }
     setState(() => _busy.add(line.itemId));
     try {
       await OrdersDao.I.setItemQty(
-          itemId: line.itemId, orderId: _orderId, newQty: line.qty - 1);
+        itemId: line.itemId,
+        orderId: _orderId,
+        newQty: line.qty - 1,
+      );
       await _refreshCart();
     } finally {
-      if (mounted) { setState(() => _busy.remove(line.itemId)); }
+      if (mounted) {
+        setState(() => _busy.remove(line.itemId));
+      }
     }
   }
 
   Future<void> _removeLine(OrderLine line) async {
-    if (_busy.contains(line.itemId)) { return; }
+    if (_busy.contains(line.itemId)) {
+      return;
+    }
     setState(() => _busy.add(line.itemId));
     try {
       await OrdersDao.I.removeOrderItem(line.itemId, _orderId);
       await _refreshCart();
     } finally {
-      if (mounted) { setState(() => _busy.remove(line.itemId)); }
+      if (mounted) {
+        setState(() => _busy.remove(line.itemId));
+      }
     }
   }
 
-  // ── PRINTO: dërgon në kuzhinë, qëndron në ekran ──────────────────────────
+  // ── PRINTO: dërgon në kuzhinë + kthen te login ──────────────────────────
   Future<void> _onPrinto() async {
     if (_lines.isEmpty) {
       _showSnack('Shporta është bosh.', color: AppTheme.warning);
       return;
     }
-    await OrdersDao.I.markItemsAsPrinted(_orderId);
-    if (!mounted) { return; }
-    _showSnack('Porosia u dërgua në kuzhinë.', color: const Color(0xFF3B82F6));
+
+    try {
+      await OrdersDao.I.markItemsAsPrinted(_orderId);
+      if (!mounted) {
+        return;
+      }
+
+      _showSnack(
+        'Porosia u dërgua. Kamarieri u logout.',
+        color: const Color(0xFF3B82F6),
+      );
+
+      Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      _showSnack('Gabim gjatë printimit: $e', color: AppTheme.error);
+    }
   }
 
   // ── PAGUAJ: mbyll, tregon faturën ────────────────────────────────────────
@@ -158,7 +205,9 @@ class _OrderScreenState extends State<OrderScreen> {
         tableName: widget.tableName,
       ),
     );
-    if (method == null || !mounted) { return; }
+    if (method == null || !mounted) {
+      return;
+    }
 
     try {
       await OrdersDao.I.payAndClose(
@@ -167,7 +216,9 @@ class _OrderScreenState extends State<OrderScreen> {
         waiterId: widget.waiterId,
         paymentMethod: method,
       );
-      if (!mounted) { return; }
+      if (!mounted) {
+        return;
+      }
       await showDialog<void>(
         context: context,
         barrierDismissible: false,
@@ -178,10 +229,14 @@ class _OrderScreenState extends State<OrderScreen> {
           paymentMethod: method,
         ),
       );
-      if (!mounted) { return; }
+      if (!mounted) {
+        return;
+      }
       Navigator.pop(context, true);
     } catch (e) {
-      if (!mounted) { return; }
+      if (!mounted) {
+        return;
+      }
       _showSnack('Gabim në pagesë: $e', color: AppTheme.error);
     }
   }
@@ -196,13 +251,13 @@ class _OrderScreenState extends State<OrderScreen> {
         title: Row(
           children: [
             IconBadge(
-                icon: Icons.exit_to_app_rounded,
-                color: AppTheme.warning,
-                size: 36,
-                iconSize: 18),
+              icon: Icons.exit_to_app_rounded,
+              color: AppTheme.warning,
+              size: 36,
+              iconSize: 18,
+            ),
             const SizedBox(width: 12),
-            Text('Mbyll ${widget.tableName}',
-                style: AppTheme.titleSmall),
+            Text('Mbyll ${widget.tableName}', style: AppTheme.titleSmall),
           ],
         ),
         content: const Text(
@@ -212,28 +267,35 @@ class _OrderScreenState extends State<OrderScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('Anulo',
-                style: TextStyle(color: AppTheme.textSecondary)),
+            child: Text(
+              'Anulo',
+              style: TextStyle(color: AppTheme.textSecondary),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.warning,
               foregroundColor: Colors.black87,
               elevation: 0,
-              shape: RoundedRectangleBorder(
-                  borderRadius: AppTheme.radiusSmall),
+              shape: RoundedRectangleBorder(borderRadius: AppTheme.radiusSmall),
             ),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Mbyll Tavolinen',
-                style: TextStyle(fontWeight: FontWeight.w800)),
+            child: const Text(
+              'Mbyll Tavolinen',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
           ),
         ],
       ),
     );
 
-    if (ok != true || !mounted) { return; }
+    if (ok != true || !mounted) {
+      return;
+    }
     await TablesDao.I.releaseTableAsWaiter(widget.tableId);
-    if (!mounted) { return; }
+    if (!mounted) {
+      return;
+    }
     Navigator.pop(context, true);
   }
 
@@ -243,8 +305,7 @@ class _OrderScreenState extends State<OrderScreen> {
         content: Text(msg),
         backgroundColor: color,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-            borderRadius: AppTheme.radiusSmall),
+        shape: RoundedRectangleBorder(borderRadius: AppTheme.radiusSmall),
         margin: const EdgeInsets.all(12),
         duration: const Duration(seconds: 2),
       ),
@@ -262,7 +323,8 @@ class _OrderScreenState extends State<OrderScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: 56, height: 56,
+                width: 56,
+                height: 56,
                 decoration: BoxDecoration(
                   color: AppTheme.primary.withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(16),
@@ -270,12 +332,16 @@ class _OrderScreenState extends State<OrderScreen> {
                 child: const Padding(
                   padding: EdgeInsets.all(14),
                   child: CircularProgressIndicator(
-                      color: AppTheme.primary, strokeWidth: 2.5),
+                    color: AppTheme.primary,
+                    strokeWidth: 2.5,
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
-              Text('Duke hapur ${widget.tableName}…',
-                  style: AppTheme.bodySmall),
+              Text(
+                'Duke hapur ${widget.tableName}…',
+                style: AppTheme.bodySmall,
+              ),
             ],
           ),
         ),
@@ -290,27 +356,33 @@ class _OrderScreenState extends State<OrderScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const IconBadge(
-                  icon: Icons.error_outline_rounded,
-                  color: AppTheme.error,
-                  size: 56,
-                  iconSize: 28),
+                icon: Icons.error_outline_rounded,
+                color: AppTheme.error,
+                size: 56,
+                iconSize: 28,
+              ),
               const SizedBox(height: 16),
-              const Text('Gabim në hapjen e tavolinës',
-                  style: AppTheme.titleSmall),
+              const Text(
+                'Gabim në hapjen e tavolinës',
+                style: AppTheme.titleSmall,
+              ),
               if (_error != null) ...[
                 const SizedBox(height: 8),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 32),
-                  child: Text(_error!,
-                      style: AppTheme.bodySmall,
-                      textAlign: TextAlign.center),
+                  child: Text(
+                    _error!,
+                    style: AppTheme.bodySmall,
+                    textAlign: TextAlign.center,
+                  ),
                 ),
               ],
               const SizedBox(height: 24),
               AppPrimaryButton(
-                  label: 'Kthehu',
-                  icon: Icons.arrow_back_rounded,
-                  onPressed: () => Navigator.pop(context)),
+                label: 'Kthehu',
+                icon: Icons.arrow_back_rounded,
+                onPressed: () => Navigator.pop(context),
+              ),
             ],
           ),
         ),
@@ -326,8 +398,7 @@ class _OrderScreenState extends State<OrderScreen> {
             child: Row(
               children: [
                 SizedBox(width: 340, child: _buildCartPanel()),
-                const VerticalDivider(
-                    width: 1, color: AppTheme.border),
+                const VerticalDivider(width: 1, color: AppTheme.border),
                 Expanded(child: _buildProductBrowser()),
               ],
             ),
@@ -363,33 +434,39 @@ class _OrderScreenState extends State<OrderScreen> {
             borderRadius: BorderRadius.circular(10),
             onTap: () => Navigator.pop(context),
             child: Container(
-              width: 36, height: 36,
+              width: 36,
+              height: 36,
               decoration: BoxDecoration(
                 color: AppTheme.card,
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: AppTheme.border),
               ),
-              child: const Icon(Icons.arrow_back_rounded,
-                  color: AppTheme.textSecondary, size: 18),
+              child: const Icon(
+                Icons.arrow_back_rounded,
+                color: AppTheme.textSecondary,
+                size: 18,
+              ),
             ),
           ),
           const SizedBox(width: 12),
           // Table info
           Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
               gradient: AppTheme.primaryGrad,
               borderRadius: BorderRadius.circular(999),
-              boxShadow: AppTheme.shadowGlowColor(AppTheme.primary,
-                  a: 0.25),
+              boxShadow: AppTheme.shadowGlowColor(AppTheme.primary, a: 0.25),
             ),
             child: Row(
               children: [
-                const Icon(Icons.table_restaurant_rounded,
-                    color: Colors.white, size: 14),
+                const Icon(
+                  Icons.table_restaurant_rounded,
+                  color: Colors.white,
+                  size: 14,
+                ),
                 const SizedBox(width: 6),
-                Text(widget.tableName,
+                Text(
+                  widget.tableName,
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w800,
@@ -402,13 +479,13 @@ class _OrderScreenState extends State<OrderScreen> {
           const SizedBox(width: 10),
           if (_totalCents > 0)
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: AppTheme.warning.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(999),
                 border: Border.all(
-                    color: AppTheme.warning.withValues(alpha: 0.30)),
+                  color: AppTheme.warning.withValues(alpha: 0.30),
+                ),
               ),
               child: Text(
                 moneyFromCents(_totalCents),
@@ -425,20 +502,24 @@ class _OrderScreenState extends State<OrderScreen> {
             borderRadius: BorderRadius.circular(10),
             onTap: _onCloseTable,
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
                 color: AppTheme.warning.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                    color: AppTheme.warning.withValues(alpha: 0.25)),
+                  color: AppTheme.warning.withValues(alpha: 0.25),
+                ),
               ),
               child: Row(
                 children: const [
-                  Icon(Icons.exit_to_app_rounded,
-                      color: AppTheme.warning, size: 15),
+                  Icon(
+                    Icons.exit_to_app_rounded,
+                    color: AppTheme.warning,
+                    size: 15,
+                  ),
                   SizedBox(width: 6),
-                  Text('Mbyll',
+                  Text(
+                    'Mbyll',
                     style: TextStyle(
                       color: AppTheme.warning,
                       fontWeight: FontWeight.w700,
@@ -468,23 +549,25 @@ class _OrderScreenState extends State<OrderScreen> {
           Container(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
             decoration: BoxDecoration(
-              border:
-                  Border(bottom: BorderSide(color: AppTheme.border)),
+              border: Border(bottom: BorderSide(color: AppTheme.border)),
             ),
             child: Row(
               children: [
                 const IconBadge(
-                    icon: Icons.receipt_long_rounded,
-                    color: AppTheme.primary,
-                    size: 32,
-                    iconSize: 16),
+                  icon: Icons.receipt_long_rounded,
+                  color: AppTheme.primary,
+                  size: 32,
+                  iconSize: 16,
+                ),
                 const SizedBox(width: 10),
                 Text('Porosia', style: AppTheme.titleSmall),
                 const Spacer(),
                 if (_lines.isNotEmpty)
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: AppTheme.primary.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(999),
@@ -510,7 +593,8 @@ class _OrderScreenState extends State<OrderScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Container(
-                          width: 56, height: 56,
+                          width: 56,
+                          height: 56,
                           decoration: BoxDecoration(
                             color: AppTheme.primary.withValues(alpha: 0.06),
                             borderRadius: BorderRadius.circular(16),
@@ -522,8 +606,10 @@ class _OrderScreenState extends State<OrderScreen> {
                           ),
                         ),
                         const SizedBox(height: 12),
-                        const Text('Shto produkte nga lista',
-                            style: AppTheme.bodySmall),
+                        const Text(
+                          'Shto produkte nga lista',
+                          style: AppTheme.bodySmall,
+                        ),
                       ],
                     ),
                   )
@@ -541,8 +627,7 @@ class _OrderScreenState extends State<OrderScreen> {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: AppTheme.card,
-              border:
-                  Border(top: BorderSide(color: AppTheme.border)),
+              border: Border(top: BorderSide(color: AppTheme.border)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -550,7 +635,8 @@ class _OrderScreenState extends State<OrderScreen> {
                 // Total row
                 Row(
                   children: [
-                    Text('TOTALI',
+                    Text(
+                      'TOTALI',
                       style: AppTheme.caption.copyWith(
                         letterSpacing: 1.5,
                         fontWeight: FontWeight.w800,
@@ -608,7 +694,8 @@ class _OrderScreenState extends State<OrderScreen> {
         children: [
           // Qty badge
           Container(
-            width: 28, height: 28,
+            width: 28,
+            height: 28,
             decoration: BoxDecoration(
               color: AppTheme.primary.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(8),
@@ -634,11 +721,14 @@ class _OrderScreenState extends State<OrderScreen> {
                   line.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTheme.bodyMedium
-                      .copyWith(fontWeight: FontWeight.w600),
+                  style: AppTheme.bodyMedium.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-                Text(moneyFromCents(line.unitPriceCents),
-                    style: AppTheme.bodySmall),
+                Text(
+                  moneyFromCents(line.unitPriceCents),
+                  style: AppTheme.bodySmall,
+                ),
               ],
             ),
           ),
@@ -669,12 +759,14 @@ class _OrderScreenState extends State<OrderScreen> {
             onTap: isBusy ? null : () => _removeLine(line),
             child: Container(
               margin: const EdgeInsets.only(left: 4),
-              width: 26, height: 26,
+              width: 26,
+              height: 26,
               decoration: BoxDecoration(
                 color: AppTheme.error.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(6),
               ),
-              child: Icon(Icons.close_rounded,
+              child: Icon(
+                Icons.close_rounded,
                 size: 13,
                 color: AppTheme.error.withValues(alpha: 0.70),
               ),
@@ -717,7 +809,9 @@ class _OrderScreenState extends State<OrderScreen> {
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 180),
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 6),
+                              horizontal: 14,
+                              vertical: 6,
+                            ),
                             decoration: BoxDecoration(
                               gradient: sel ? AppTheme.primaryGrad : null,
                               color: sel ? null : AppTheme.card,
@@ -729,7 +823,9 @@ class _OrderScreenState extends State<OrderScreen> {
                               ),
                               boxShadow: sel
                                   ? AppTheme.shadowGlowColor(
-                                      AppTheme.primary, a: 0.20)
+                                      AppTheme.primary,
+                                      a: 0.20,
+                                    )
                                   : [],
                             ),
                             child: Text(
@@ -768,28 +864,26 @@ class _OrderScreenState extends State<OrderScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       IconBadge(
-                          icon: Icons.inventory_2_outlined,
-                          color: AppTheme.textMuted,
-                          size: 48,
-                          iconSize: 24),
+                        icon: Icons.inventory_2_outlined,
+                        color: AppTheme.textMuted,
+                        size: 48,
+                        iconSize: 24,
+                      ),
                       const SizedBox(height: 12),
-                      const Text('S\'ka produkte.',
-                          style: AppTheme.bodySmall),
+                      const Text('S\'ka produkte.', style: AppTheme.bodySmall),
                     ],
                   ),
                 )
               : GridView.builder(
                   padding: const EdgeInsets.all(12),
-                  gridDelegate:
-                      const SliverGridDelegateWithFixedCrossAxisCount(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 4,
                     crossAxisSpacing: 10,
                     mainAxisSpacing: 10,
                     childAspectRatio: 1.0,
                   ),
                   itemCount: _products.length,
-                  itemBuilder: (_, i) =>
-                      _buildProductCard(_products[i]),
+                  itemBuilder: (_, i) => _buildProductCard(_products[i]),
                 ),
         ),
       ],
@@ -798,9 +892,9 @@ class _OrderScreenState extends State<OrderScreen> {
 
   Widget _buildProductCard(ProductRow p) {
     final cartLine = _lines.cast<OrderLine?>().firstWhere(
-          (l) => l?.productId == p.id,
-          orElse: () => null,
-        );
+      (l) => l?.productId == p.id,
+      orElse: () => null,
+    );
     final inCart = cartLine != null;
     final qty = cartLine?.qty ?? 0;
 
@@ -815,10 +909,7 @@ class _OrderScreenState extends State<OrderScreen> {
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: inCart
-                  ? [
-                      AppTheme.primary.withValues(alpha: 0.15),
-                      AppTheme.card,
-                    ]
+                  ? [AppTheme.primary.withValues(alpha: 0.15), AppTheme.card]
                   : [AppTheme.cardAlt, AppTheme.card],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -841,18 +932,23 @@ class _OrderScreenState extends State<OrderScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    width: 28, height: 28,
+                    width: 28,
+                    height: 28,
                     decoration: BoxDecoration(
                       color: AppTheme.primary.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(7),
                     ),
-                    child: const Icon(Icons.local_cafe_rounded,
-                        size: 14, color: AppTheme.primary),
+                    child: const Icon(
+                      Icons.local_cafe_rounded,
+                      size: 14,
+                      color: AppTheme.primary,
+                    ),
                   ),
                   const Spacer(),
                   if (inCart)
                     Container(
-                      width: 22, height: 22,
+                      width: 22,
+                      height: 22,
                       decoration: BoxDecoration(
                         gradient: AppTheme.primaryGrad,
                         shape: BoxShape.circle,
@@ -875,8 +971,10 @@ class _OrderScreenState extends State<OrderScreen> {
                 p.name,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: AppTheme.bodyMedium
-                    .copyWith(fontWeight: FontWeight.w700, fontSize: 12),
+                style: AppTheme.bodyMedium.copyWith(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
               ),
               const SizedBox(height: 4),
               Text(
@@ -920,16 +1018,20 @@ class _QtyControl extends StatelessWidget {
           child: busy
               ? const Center(
                   child: SizedBox(
-                    width: 12, height: 12,
+                    width: 12,
+                    height: 12,
                     child: CircularProgressIndicator(
-                        strokeWidth: 2, color: AppTheme.primary),
+                      strokeWidth: 2,
+                      color: AppTheme.primary,
+                    ),
                   ),
                 )
               : Text(
                   '$qty',
                   textAlign: TextAlign.center,
-                  style: AppTheme.bodyMedium
-                      .copyWith(fontWeight: FontWeight.w800),
+                  style: AppTheme.bodyMedium.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
         ),
         _btn(Icons.add_rounded, onIncrement),
@@ -942,14 +1044,18 @@ class _QtyControl extends StatelessWidget {
       onTap: busy ? null : fn,
       borderRadius: BorderRadius.circular(6),
       child: Container(
-        width: 26, height: 26,
+        width: 26,
+        height: 26,
         decoration: BoxDecoration(
           color: AppTheme.cardAlt,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(color: AppTheme.border),
         ),
-        child: Icon(icon, size: 13,
-            color: busy ? AppTheme.textMuted : AppTheme.primary),
+        child: Icon(
+          icon,
+          size: 13,
+          color: busy ? AppTheme.textMuted : AppTheme.primary,
+        ),
       ),
     );
   }
@@ -985,8 +1091,7 @@ class _PaymentDialogState extends State<_PaymentDialog> {
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: AppTheme.surface,
-      shape:
-          RoundedRectangleBorder(borderRadius: AppTheme.radiusLarge),
+      shape: RoundedRectangleBorder(borderRadius: AppTheme.radiusLarge),
       child: SizedBox(
         width: 400,
         child: Padding(
@@ -999,30 +1104,38 @@ class _PaymentDialogState extends State<_PaymentDialog> {
               Row(
                 children: [
                   Container(
-                    width: 44, height: 44,
+                    width: 44,
+                    height: 44,
                     decoration: BoxDecoration(
                       gradient: AppTheme.successGrad,
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.payments_rounded,
-                        color: Colors.white, size: 22),
+                    child: const Icon(
+                      Icons.payments_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Procesimi i Pagesës',
-                            style: AppTheme.titleSmall),
-                        Text(widget.tableName,
-                            style: AppTheme.bodySmall),
+                        const Text(
+                          'Procesimi i Pagesës',
+                          style: AppTheme.titleSmall,
+                        ),
+                        Text(widget.tableName, style: AppTheme.bodySmall),
                       ],
                     ),
                   ),
                   IconButton(
                     onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close_rounded,
-                        color: AppTheme.textSecondary, size: 20),
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: AppTheme.textSecondary,
+                      size: 20,
+                    ),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                   ),
@@ -1042,11 +1155,13 @@ class _PaymentDialogState extends State<_PaymentDialog> {
                   ),
                   borderRadius: AppTheme.borderRadius,
                   border: Border.all(
-                      color: AppTheme.success.withValues(alpha: 0.25)),
+                    color: AppTheme.success.withValues(alpha: 0.25),
+                  ),
                 ),
                 child: Column(
                   children: [
-                    Text('TOTALI',
+                    Text(
+                      'TOTALI',
                       style: AppTheme.caption.copyWith(
                         letterSpacing: 2,
                         color: AppTheme.textSecondary,
@@ -1071,9 +1186,17 @@ class _PaymentDialogState extends State<_PaymentDialog> {
               // Method toggle
               Row(
                 children: [
-                  Expanded(child: _methodBtn('cash', Icons.money_rounded, 'CASH')),
+                  Expanded(
+                    child: _methodBtn('cash', Icons.money_rounded, 'CASH'),
+                  ),
                   const SizedBox(width: 10),
-                  Expanded(child: _methodBtn('card', Icons.credit_card_rounded, 'KARTË')),
+                  Expanded(
+                    child: _methodBtn(
+                      'card',
+                      Icons.credit_card_rounded,
+                      'KARTË',
+                    ),
+                  ),
                 ],
               ),
 
@@ -1089,18 +1212,21 @@ class _PaymentDialogState extends State<_PaymentDialog> {
                     fontWeight: FontWeight.w700,
                   ),
                   keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true),
+                    decimal: true,
+                  ),
                   inputFormatters: [
                     FilteringTextInputFormatter.allow(RegExp(r'[\d.,]')),
                   ],
                   decoration: InputDecoration(
                     labelText: 'Shuma e dhënë (€)',
-                    labelStyle:
-                        const TextStyle(color: AppTheme.textSecondary),
+                    labelStyle: const TextStyle(color: AppTheme.textSecondary),
                     filled: true,
                     fillColor: AppTheme.cardAlt,
-                    prefixIcon: const Icon(Icons.euro_rounded,
-                        color: AppTheme.primary, size: 20),
+                    prefixIcon: const Icon(
+                      Icons.euro_rounded,
+                      color: AppTheme.primary,
+                      size: 20,
+                    ),
                     border: OutlineInputBorder(
                       borderRadius: AppTheme.borderRadius,
                       borderSide: BorderSide(color: AppTheme.border),
@@ -1112,21 +1238,23 @@ class _PaymentDialogState extends State<_PaymentDialog> {
                     focusedBorder: OutlineInputBorder(
                       borderRadius: AppTheme.borderRadius,
                       borderSide: const BorderSide(
-                          color: AppTheme.primary, width: 1.5),
+                        color: AppTheme.primary,
+                        width: 1.5,
+                      ),
                     ),
                   ),
                   onChanged: (v) {
-                    final parsed =
-                        double.tryParse(v.replaceAll(',', '.')) ?? 0;
-                    setState(() =>
-                        _cashGivenCents = (parsed * 100).round());
+                    final parsed = double.tryParse(v.replaceAll(',', '.')) ?? 0;
+                    setState(() => _cashGivenCents = (parsed * 100).round());
                   },
                 ),
                 const SizedBox(height: 10),
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 12),
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: _changeCents >= 0
                         ? AppTheme.success.withValues(alpha: 0.08)
@@ -1143,7 +1271,8 @@ class _PaymentDialogState extends State<_PaymentDialog> {
                       Text(
                         _changeCents >= 0 ? 'Kusuri:' : 'Mungon:',
                         style: AppTheme.bodyMedium.copyWith(
-                            color: AppTheme.textSecondary),
+                          color: AppTheme.textSecondary,
+                        ),
                       ),
                       const Spacer(),
                       Text(
@@ -1199,9 +1328,7 @@ class _PaymentDialogState extends State<_PaymentDialog> {
           color: selected ? null : AppTheme.cardAlt,
           borderRadius: AppTheme.radiusSmall,
           border: Border.all(
-            color: selected
-                ? Colors.transparent
-                : AppTheme.border,
+            color: selected ? Colors.transparent : AppTheme.border,
           ),
           boxShadow: selected
               ? AppTheme.shadowGlowColor(AppTheme.primary, a: 0.20)
@@ -1209,18 +1336,17 @@ class _PaymentDialogState extends State<_PaymentDialog> {
         ),
         child: Column(
           children: [
-            Icon(icon,
-                color: selected ? Colors.white : AppTheme.textSecondary,
-                size: 22),
+            Icon(
+              icon,
+              color: selected ? Colors.white : AppTheme.textSecondary,
+              size: 22,
+            ),
             const SizedBox(height: 6),
             Text(
               label,
               style: TextStyle(
-                color:
-                    selected ? Colors.white : AppTheme.textSecondary,
-                fontWeight: selected
-                    ? FontWeight.w800
-                    : FontWeight.w500,
+                color: selected ? Colors.white : AppTheme.textSecondary,
+                fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
                 fontSize: 12,
               ),
             ),
@@ -1255,8 +1381,7 @@ class _ReceiptDialog extends StatelessWidget {
 
     return Dialog(
       backgroundColor: AppTheme.surface,
-      shape:
-          RoundedRectangleBorder(borderRadius: AppTheme.radiusLarge),
+      shape: RoundedRectangleBorder(borderRadius: AppTheme.radiusLarge),
       child: SizedBox(
         width: 380,
         child: Padding(
@@ -1266,18 +1391,25 @@ class _ReceiptDialog extends StatelessWidget {
             children: [
               // Success checkmark
               Container(
-                width: 60, height: 60,
+                width: 60,
+                height: 60,
                 decoration: BoxDecoration(
                   gradient: AppTheme.successGrad,
                   shape: BoxShape.circle,
-                  boxShadow:
-                      AppTheme.shadowGlowColor(AppTheme.success, a: 0.35),
+                  boxShadow: AppTheme.shadowGlowColor(
+                    AppTheme.success,
+                    a: 0.35,
+                  ),
                 ),
-                child: const Icon(Icons.check_rounded,
-                    color: Colors.white, size: 30),
+                child: const Icon(
+                  Icons.check_rounded,
+                  color: Colors.white,
+                  size: 30,
+                ),
               ),
               const SizedBox(height: 14),
-              const Text('FATURA',
+              const Text(
+                'FATURA',
                 style: TextStyle(
                   color: AppTheme.textPrimary,
                   fontWeight: FontWeight.w900,
@@ -1303,10 +1435,10 @@ class _ReceiptDialog extends StatelessWidget {
                         child: Row(
                           children: [
                             Container(
-                              width: 24, height: 24,
+                              width: 24,
+                              height: 24,
                               decoration: BoxDecoration(
-                                color: AppTheme.primary
-                                    .withValues(alpha: 0.12),
+                                color: AppTheme.primary.withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Center(
@@ -1322,9 +1454,11 @@ class _ReceiptDialog extends StatelessWidget {
                             ),
                             const SizedBox(width: 10),
                             Expanded(
-                              child: Text(l.name,
-                                  style: AppTheme.bodyMedium,
-                                  overflow: TextOverflow.ellipsis),
+                              child: Text(
+                                l.name,
+                                style: AppTheme.bodyMedium,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                             Text(
                               moneyFromCents(l.lineTotalCents),
@@ -1349,7 +1483,8 @@ class _ReceiptDialog extends StatelessWidget {
               // Total
               Row(
                 children: [
-                  Text('TOTALI',
+                  Text(
+                    'TOTALI',
                     style: AppTheme.caption.copyWith(
                       letterSpacing: 2,
                       fontWeight: FontWeight.w800,
@@ -1386,12 +1521,15 @@ class _ReceiptDialog extends StatelessWidget {
                   const Spacer(),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: AppTheme.success.withValues(alpha: 0.10),
                       borderRadius: BorderRadius.circular(999),
                       border: Border.all(
-                          color: AppTheme.success.withValues(alpha: 0.25)),
+                        color: AppTheme.success.withValues(alpha: 0.25),
+                      ),
                     ),
                     child: const Text(
                       'PAGUAR',
