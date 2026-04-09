@@ -87,19 +87,17 @@ class _LoginScreenState extends State<LoginScreen>
       ..clearSnackBars()
       ..showSnackBar(
         SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.error_outline_rounded, color: _kError, size: 18),
-              const SizedBox(width: 10),
-              Text(msg, style: const TextStyle(color: Colors.white)),
-            ],
+          content: Text(
+            msg,
+            style: const TextStyle(color: Colors.white),
+            softWrap: true,
           ),
           backgroundColor: const Color(0xFF1C1C2E),
           behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          margin: const EdgeInsets.all(16),
         ),
       );
   }
@@ -161,9 +159,11 @@ class _LoginScreenState extends State<LoginScreen>
             children: [
               Icon(Icons.developer_mode, color: _kAccent),
               const SizedBox(width: 12),
-              const Text(
-                'Developer Access',
-                style: TextStyle(color: Colors.white),
+              const Flexible(
+                child: Text(
+                  'Developer Access',
+                  style: TextStyle(color: Colors.white),
+                ),
               ),
             ],
           ),
@@ -909,7 +909,7 @@ class _PinDots extends StatelessWidget {
         final isFilled = i < filled;
         return AnimatedContainer(
           duration: const Duration(milliseconds: 120),
-          curve: Curves.elasticOut,
+          curve: Curves.easeOut,
           margin: const EdgeInsets.symmetric(horizontal: 10),
           width: isFilled ? 14 : 12,
           height: isFilled ? 14 : 12,
@@ -920,14 +920,12 @@ class _PinDots extends StatelessWidget {
               color: isFilled ? _kAccent : Colors.white24,
               width: 2,
             ),
-            boxShadow: isFilled
-                ? [
-                    BoxShadow(
-                      color: _kAccent.withValues(alpha: 0.50),
-                      blurRadius: 8,
-                    ),
-                  ]
-                : [],
+            boxShadow: [
+              BoxShadow(
+                color: _kAccent.withValues(alpha: isFilled ? 0.50 : 0.0),
+                blurRadius: 8,
+              ),
+            ],
           ),
         );
       }),
@@ -1097,15 +1095,15 @@ class _ActionBtn extends StatelessWidget {
           border: !primary
               ? Border.all(color: Colors.white.withValues(alpha: 0.07))
               : null,
-          boxShadow: primary && onTap != null
-              ? [
-                  BoxShadow(
-                    color: _kAccent.withValues(alpha: 0.35),
-                    blurRadius: 16,
-                    offset: const Offset(0, 6),
-                  ),
-                ]
-              : [],
+          boxShadow: [
+            BoxShadow(
+              color: primary && onTap != null
+                  ? _kAccent.withValues(alpha: 0.35)
+                  : Colors.transparent,
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,

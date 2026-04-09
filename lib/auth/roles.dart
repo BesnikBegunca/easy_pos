@@ -35,8 +35,17 @@ bool canViewReports(UserRole r) =>
     r == UserRole.superAdmin ||
     r == UserRole.admin ||
     r == UserRole.manager;
-bool canManageUsers(UserRole r) =>
+bool canAccessAdminPanel(UserRole r) =>
+    r == UserRole.developer ||
+    r == UserRole.superAdmin ||
+    r == UserRole.admin ||
+    r == UserRole.manager;
+bool canManageUsers(UserRole r) => canAccessAdminPanel(r);
+bool canManageProducts(UserRole r) => canAccessAdminPanel(r);
+bool canSettleWorkers(UserRole r) => canAccessAdminPanel(r);
+bool canAccessSystemSettings(UserRole r) =>
     r == UserRole.developer || r == UserRole.superAdmin || r == UserRole.admin;
+bool canAccessCoreConfiguration(UserRole r) => canAccessSystemSettings(r);
 
 bool canAccessDevMode(UserRole r) => r == UserRole.developer;
 bool canCreateAdmin(UserRole r) =>

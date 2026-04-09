@@ -1,10 +1,14 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../auth/license_service.dart';
 import '../auth/roles.dart';
 import '../auth/session.dart';
+import '../data/app_settings.dart';
+import '../data/dao_settings.dart';
 import '../theme/app_theme.dart';
 import 'admin_dashboard.dart';
 import 'developer_mode_screen.dart';
+import 'market_pos_screen.dart';
 import 'tables_screen.dart';
 
 class ShellScreen extends StatefulWidget {
@@ -35,7 +39,7 @@ class _ShellScreenState extends State<ShellScreen> {
     Widget body;
     if (Session.I.isDeveloperMode) {
       body = const DeveloperModeScreen();
-    } else if (isHighRole(u.role)) {
+    } else if (canAccessAdminPanel(u.role)) {
       body = const AdminDashboard();
     } else {
       body = const _WaiterShell();
@@ -45,9 +49,52 @@ class _ShellScreenState extends State<ShellScreen> {
   }
 }
 
-// ── Waiter/Manager shell with premium top-bar ─────────────────────────────────
-class _WaiterShell extends StatelessWidget {
+// ── Waiter/Manager shell — mode-aware ────────────────────────────────────────
+class _WaiterShell extends StatefulWidget {
   const _WaiterShell();
+
+  @override
+  State<_WaiterShell> createState() => _WaiterShellState();
+}
+
+class _WaiterShellState extends State<_WaiterShell> {
+  String? _mode; // null = still loading
+  Timer? _inactivityTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMode();
+    _resetInactivityTimer();
+  }
+
+  @override
+  void dispose() {
+    _inactivityTimer?.cancel();
+    super.dispose();
+  }
+
+  void _resetInactivityTimer() {
+    final minutes = AppSettings.I.autoLogoutMinutes;
+    if (minutes <= 0) return; // feature disabled
+    _inactivityTimer?.cancel();
+    _inactivityTimer = Timer(Duration(minutes: minutes), _autoLogout);
+  }
+
+  void _autoLogout() {
+    if (!mounted) return;
+    Session.I.logout();
+    Navigator.of(context).pushReplacementNamed('/login');
+  }
+
+  Future<void> _loadMode() async {
+    final mode = await SettingsDao.I.getString(
+      SettingsDao.businessMode,
+      SettingsDao.defaultBusinessMode,
+    );
+    if (!mounted) return;
+    setState(() => _mode = mode);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,15 +104,29 @@ class _WaiterShell extends StatelessWidget {
         : u.username;
     final roleLabel = u.role == UserRole.manager ? 'Manager' : 'Kamarjer';
 
-    return Scaffold(
-      backgroundColor: AppTheme.bg,
-      body: Column(
-        children: [
-          // ── Premium top bar ───────────────────────────────────────────────
-          _WaiterTopBar(name: name, roleLabel: roleLabel),
-          // ── Tables content ────────────────────────────────────────────────
-          const Expanded(child: TablesScreen()),
-        ],
+    Widget body;
+    if (_mode == null) {
+      body = const Center(
+        child: CircularProgressIndicator(color: AppTheme.primary),
+      );
+    } else if (_mode == 'market') {
+      body = const MarketPosScreen();
+    } else {
+      body = const TablesScreen();
+    }
+
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: (_) => _resetInactivityTimer(),
+      onPointerMove: (_) => _resetInactivityTimer(),
+      child: Scaffold(
+        backgroundColor: AppTheme.bg,
+        body: Column(
+          children: [
+            _WaiterTopBar(name: name, roleLabel: roleLabel, mode: _mode),
+            Expanded(child: body),
+          ],
+        ),
       ),
     );
   }
@@ -74,7 +135,8 @@ class _WaiterShell extends StatelessWidget {
 class _WaiterTopBar extends StatelessWidget {
   final String name;
   final String roleLabel;
-  const _WaiterTopBar({required this.name, required this.roleLabel});
+  final String? mode;
+  const _WaiterTopBar({required this.name, required this.roleLabel, this.mode});
 
   @override
   Widget build(BuildContext context) {
@@ -127,7 +189,7 @@ class _WaiterTopBar extends StatelessWidget {
                 ),
               ),
               Text(
-                'Tavolinat',
+                mode == 'market' ? 'Kasa' : 'Tavolinat',
                 style: AppTheme.caption.copyWith(
                   color: AppTheme.textSecondary,
                   fontSize: 11,

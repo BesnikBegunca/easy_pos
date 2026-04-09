@@ -411,6 +411,71 @@ class OrdersDao {
         .toList();
   }
 
+  // ── Market mode: atomic create + pay ──────────────────────────────────────
+
+  /// Creates an order, inserts items, applies discount, and marks it paid —
+  /// all in one DB transaction. Used exclusively by Market POS mode.
+  Future<void> createMarketTransaction({
+    required int tableId,
+    required int waiterId,
+    required String paymentMethod, // 'cash' | 'card'
+    required int grossCents, // total before discount
+    required int discountCents, // discount to subtract
+    required List<Map<String, int>> items, // productId, qty, unitPriceCents
+  }) async {
+    if (items.isEmpty) return;
+    final db = await AppDb.I.db;
+
+    await db.transaction((txn) async {
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+      final finalTotal = (grossCents - discountCents).clamp(0, grossCents);
+
+      // 1. Create order
+      final orderId = await txn.insert('orders', {
+        'table_id': tableId,
+        'waiter_id': waiterId,
+        'status': 'paid',
+        'total_cents': finalTotal,
+        'created_at': nowMs,
+        'closed_at': nowMs,
+        'settled_id': null,
+      });
+
+      // 2. Insert items
+      for (final item in items) {
+        await txn.insert('order_items', {
+          'order_id': orderId,
+          'product_id': item['productId']!,
+          'qty': item['qty']!,
+          'unit_price_cents': item['unitPriceCents']!,
+          'line_total_cents': item['qty']! * item['unitPriceCents']!,
+          'note': null,
+          'is_printed': 1,
+        });
+      }
+
+      // 3. Payment record
+      await txn.insert('payments', {
+        'table_id': tableId,
+        'order_id': orderId,
+        'total_cents': finalTotal,
+        'method': paymentMethod,
+        'paid_at': nowMs,
+        'paid_by': waiterId,
+      });
+
+      // 4. Printed sales for waiter settlement tracking
+      await txn.insert('printed_sales', {
+        'waiter_id': waiterId,
+        'order_id': orderId,
+        'table_id': tableId,
+        'amount_cents': finalTotal,
+        'printed_at': nowMs,
+        'settled_id': null,
+      });
+    });
+  }
+
   // ── Private helpers ────────────────────────────────────────────────────────
 
   Future<void> _recalcOrderTotal(int orderId) async {

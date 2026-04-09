@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../auth/roles.dart';
+import '../auth/session.dart';
 import '../data/dao_products.dart';
 import '../theme/app_theme.dart';
 import '../util/money.dart';
@@ -60,6 +62,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
               ),
               const SizedBox(height: 10),
               DropdownButtonFormField<int>(
+                isExpanded: true,
                 value: catId,
                 items: [
                   for (final c in categories)
@@ -99,6 +102,16 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final me = Session.I.current!;
+    if (!canManageProducts(me.role)) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Menaxho Produkte')),
+        body: const Center(
+          child: Text('Access denied. Only Admin/Manager+ can manage products.'),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Menaxho Produkte'),
@@ -109,35 +122,47 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            Row(
-              children: [
-                const Text(
-                  'Produktet',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-                ),
-                const SizedBox(width: 12),
-                SizedBox(
-                  width: 240,
-                  child: DropdownButtonFormField<int>(
-                    value: selectedCategoryId,
-                    items: [
-                      for (final c in categories)
-                        DropdownMenuItem(value: c.id, child: Text(c.name)),
-                    ],
-                    onChanged: (v) async {
-                      selectedCategoryId = v;
-                      await _load();
-                    },
-                    decoration: const InputDecoration(labelText: 'Kategoria'),
-                  ),
-                ),
-                const Spacer(),
-                ElevatedButton.icon(
-                  onPressed: _addProductDialog,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Shto Produkt'),
-                ),
-              ],
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isNarrow = constraints.maxWidth < 700;
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    const Text(
+                      'Produktet',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(
+                      width: isNarrow ? constraints.maxWidth : 240,
+                      child: DropdownButtonFormField<int>(
+                        isExpanded: true,
+                        value: selectedCategoryId,
+                        items: [
+                          for (final c in categories)
+                            DropdownMenuItem(value: c.id, child: Text(c.name)),
+                        ],
+                        onChanged: (v) async {
+                          selectedCategoryId = v;
+                          await _load();
+                        },
+                        decoration: const InputDecoration(
+                          labelText: 'Kategoria',
+                        ),
+                      ),
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: _addProductDialog,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Shto Produkt'),
+                    ),
+                  ],
+                );
+              },
             ),
 
             const SizedBox(height: 12),

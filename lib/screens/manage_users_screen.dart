@@ -56,17 +56,35 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
     _load();
   }
 
-  void _guardAdmin() {
+  UserRole get _myRole => Session.I.current!.role;
+  bool get _isManager => _myRole == UserRole.manager;
+
+  bool _canManageTarget(AppUserRow u) {
+    if (!_isManager) return true;
+    return u.role == UserRole.waiter || u.role == UserRole.manager;
+  }
+
+  bool _canAssignRole(UserRole role) {
+    if (!_isManager) return true;
+    return role == UserRole.waiter || role == UserRole.manager;
+  }
+
+  void _guardUserManagement() {
     final me = Session.I.current!;
-    if (me.role != UserRole.admin &&
-        me.role != UserRole.superAdmin &&
-        me.role != UserRole.developer) {
-      throw Exception('Forbidden: only admin/superAdmin/developer');
+    if (!canManageUsers(me.role)) {
+      throw Exception('Forbidden: only admin/manager/superAdmin/developer');
     }
+  }
+
+  void _guardTarget(AppUserRow u) {
+    if (_canManageTarget(u)) return;
+    throw Exception('Forbidden: manager cannot manage admin/system accounts');
   }
 
   List<AppUserRow> get filteredUsers {
     return users.where((u) {
+      if (_isManager && !_canManageTarget(u)) return false;
+
       final q = search.trim().toLowerCase();
       final name = (u.fullName ?? '').toLowerCase();
       final username = u.username.toLowerCase();
@@ -105,7 +123,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
 
   // ─── Dialogs ──────────────────────────────────────────────────────────────
   Future<void> _createUserDialog() async {
-    _guardAdmin();
+    _guardUserManagement();
     final usernameC = TextEditingController();
     final fullNameC = TextEditingController();
     final passC = TextEditingController();
@@ -155,6 +173,10 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
       ),
     );
     if (ok != true) return;
+    if (!_canAssignRole(role)) {
+      _snack('Manager mund te krijoje vetem Waiter/Manager.', success: false);
+      return;
+    }
     try {
       await UsersDao.I.createUser(
         username: usernameC.text,
@@ -172,7 +194,8 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
   }
 
   Future<void> _editUserDialog(AppUserRow u) async {
-    _guardAdmin();
+    _guardUserManagement();
+    _guardTarget(u);
     final fullNameC = TextEditingController(text: u.fullName ?? '');
     UserRole role = u.role;
     bool active = u.isActive;
@@ -198,7 +221,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
               _roleDropdown(
                 role,
                 (v) => setS(() => role = v ?? u.role),
-                includeAdmin: true,
+                includeAdmin: !_isManager,
               ),
               const SizedBox(height: 12),
               _switchTile(
@@ -242,6 +265,10 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
       _snack('S\'munesh me ç\'aktivizu vetveten.', success: false);
       return;
     }
+    if (!_canAssignRole(role)) {
+      _snack('Manager mund te caktoje vetem role Waiter/Manager.', success: false);
+      return;
+    }
     try {
       await UsersDao.I.updateUser(
         id: u.id,
@@ -260,7 +287,8 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
   }
 
   Future<void> _resetPasswordDialog(AppUserRow u) async {
-    _guardAdmin();
+    _guardUserManagement();
+    _guardTarget(u);
     final passC = TextEditingController();
     bool obscure = true;
 
@@ -306,7 +334,8 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
   }
 
   Future<void> _deleteUserDialog(AppUserRow u) async {
-    _guardAdmin();
+    _guardUserManagement();
+    _guardTarget(u);
     final me = Session.I.current!;
     if (u.id == me.id) {
       _snack('S\'munesh me fshi vetveten.', success: false);
@@ -648,7 +677,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
               ),
               const SizedBox(height: 16),
               Text(
-                'Vetëm Admin/Super Admin/Developer mundet me menaxhu users.',
+                'Vetem Admin/Manager/Super Admin/Developer mundet me menaxhu users.',
                 style: TextStyle(color: _textSecondary, fontSize: 16),
                 textAlign: TextAlign.center,
               ),
@@ -1336,6 +1365,7 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
   }
 
   Widget _rowActions(AppUserRow u, bool isMe) {
+    final canManageTarget = _canManageTarget(u);
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
@@ -1343,14 +1373,14 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> {
           label: 'Edit',
           icon: Icons.edit_rounded,
           color: _accent,
-          onTap: () => _editUserDialog(u),
+          onTap: canManageTarget ? () => _editUserDialog(u) : null,
         ),
         const SizedBox(width: 8),
         _actionBtn(
           label: 'Delete',
           icon: Icons.delete_outline_rounded,
           color: _danger,
-          onTap: isMe ? null : () => _deleteUserDialog(u),
+          onTap: (isMe || !canManageTarget) ? null : () => _deleteUserDialog(u),
         ),
       ],
     );
@@ -1685,3 +1715,5 @@ class _DialogShell extends StatelessWidget {
     );
   }
 }
+
+

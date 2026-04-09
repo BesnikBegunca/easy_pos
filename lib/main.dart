@@ -4,6 +4,8 @@ import 'auth/auth_service.dart';
 import 'auth/license_service.dart';
 import 'auth/roles.dart';
 import 'auth/session.dart';
+import 'data/app_settings.dart';
+import 'l10n/app_l10n.dart';
 import 'screens/license_lock_screen.dart';
 import 'screens/license_manager_screen.dart';
 import 'screens/login_screen.dart';
@@ -15,6 +17,11 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AuthService.I.ensureSeed();
   await LicenseService.I.init();
+  // Load all settings into memory once at startup.
+  // Every screen can now read AppSettings.I synchronously.
+  await AppSettings.I.load();
+  // Sync the locale notifier with the saved language preference.
+  AppL10n.I.setLocale(AppSettings.I.language);
   runApp(const App());
 }
 
@@ -25,7 +32,7 @@ class App extends StatelessWidget {
     final u = Session.I.current;
     if (u == null) return AppTheme.darkOrangeTheme();
 
-    if (isHighRole(u.role)) {
+    if (canAccessAdminPanel(u.role)) {
       return ThemeData.dark(useMaterial3: true).copyWith(
         colorScheme: const ColorScheme.dark(
           primary: Color(0xFFFF6B35),
@@ -63,17 +70,21 @@ class App extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: _getRoleTheme(),
-      home: const StartupScreen(),
-      routes: {
-        '/login': (_) => const LoginScreen(),
-        '/shell': (_) => const ShellScreen(),
-        '/manage-users': (_) => const ManageUsersScreen(),
-        '/license-lock': (_) => const LicenseLockScreen(),
-        '/license-manager': (_) => const LicenseManagerScreen(),
-      },
+    // AppL10nWidget rebuilds MaterialApp whenever language changes.
+    return AppL10nWidget(
+      builder: (locale) => MaterialApp(
+        debugShowCheckedModeBanner: false,
+        locale: locale,
+        theme: _getRoleTheme(),
+        home: const StartupScreen(),
+        routes: {
+          '/login': (_) => const LoginScreen(),
+          '/shell': (_) => const ShellScreen(),
+          '/manage-users': (_) => const ManageUsersScreen(),
+          '/license-lock': (_) => const LicenseLockScreen(),
+          '/license-manager': (_) => const LicenseManagerScreen(),
+        },
+      ),
     );
   }
 }

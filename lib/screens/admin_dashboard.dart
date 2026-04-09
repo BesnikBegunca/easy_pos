@@ -5,6 +5,7 @@ import '../auth/dao_users.dart';
 import '../auth/license_service.dart';
 import '../auth/roles.dart';
 import '../auth/session.dart';
+import '../data/app_settings.dart';
 import '../data/dao_orders.dart';
 import '../data/dao_settlements.dart';
 import '../data/dao_tables.dart';
@@ -15,6 +16,8 @@ import 'admin_products_screen.dart';
 import 'admin_settings_screen.dart';
 import 'daily_sales_screen.dart';
 import 'manage_users_screen.dart';
+import 'waiter_settlement_screen.dart';
+import 'z_report_screen.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -59,18 +62,32 @@ class _AdminDashboardState extends State<AdminDashboard> {
     }
   }
 
-  static const _navItems = [
-    (Icons.dashboard_rounded, 'Pasqyra'),
-    (Icons.groups_rounded, 'Punonjësit'),
-    (Icons.table_restaurant_rounded, 'Tavolinat'),
-    (Icons.shield_rounded, 'License'),
-    (Icons.settings_rounded, 'Settings'),
-  ];
+  List<(IconData, String, int)> _navItemsFor(AuthUser me) {
+    final items = <(IconData, String, int)>[
+      (Icons.dashboard_rounded, 'Pasqyra', 0),
+      (Icons.groups_rounded, 'Punonjesit', 1),
+      (Icons.table_restaurant_rounded, 'Tavolinat', 2),
+    ];
+    if (canAccessSystemSettings(me.role)) {
+      items.add((Icons.shield_rounded, 'License', 3));
+      items.add((Icons.settings_rounded, 'Settings', 4));
+    }
+    return items;
+  }
 
+  String _roleLabel(UserRole role) {
+    return switch (role) {
+      UserRole.developer => 'Developer',
+      UserRole.superAdmin => 'Super Admin',
+      UserRole.admin => 'Administrator',
+      UserRole.manager => 'Manager',
+      UserRole.waiter => 'Waiter',
+    };
+  }
   @override
   Widget build(BuildContext context) {
     final me = Session.I.current!;
-    if (!isHighRole(me.role)) {
+    if (!canAccessAdminPanel(me.role)) {
       return Scaffold(
         backgroundColor: AppTheme.bg,
         body: Center(
@@ -84,7 +101,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ),
               const SizedBox(height: 16),
               const Text(
-                'Only Admin+ roles can access this dashboard',
+                'Only Admin/Manager+ roles can access this dashboard',
                 style: AppTheme.bodyMedium,
               ),
             ],
@@ -124,6 +141,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final name = me.fullName?.trim().isNotEmpty == true
         ? me.fullName!
         : me.username;
+    final navItems = _navItemsFor(me);
+    final canManageCore = canAccessCoreConfiguration(me.role);
 
     return Container(
       width: 240,
@@ -171,7 +190,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         letterSpacing: -0.3,
                       ),
                     ),
-                    Text('Admin Panel', style: AppTheme.caption),
+                    Text(
+                      canManageCore ? 'Admin Panel' : 'Manager Panel',
+                      style: AppTheme.caption,
+                    ),
                   ],
                 ),
               ],
@@ -181,14 +203,19 @@ class _AdminDashboardState extends State<AdminDashboard> {
           const SizedBox(height: 12),
 
           // Nav items
-          ..._navItems.asMap().entries.map((e) {
-            final i = e.key;
-            final item = e.value;
+          ...navItems.map((item) {
             return _SidebarNavItem(
               icon: item.$1,
               label: item.$2,
-              active: _tab == i,
-              onTap: () => setState(() => _tab = i),
+              active: _tab == item.$3,
+              onTap: () async {
+                // When leaving the Settings tab, reload runtime cache so
+                // gated features (Z Report, permissions, etc.) update instantly.
+                if (_tab == 4 && item.$3 != 4) {
+                  await AppSettings.I.load();
+                }
+                if (mounted) setState(() => _tab = item.$3);
+              },
             );
           }),
 
@@ -209,32 +236,56 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                _SidebarActionBtn(
-                  icon: Icons.manage_accounts_rounded,
-                  label: 'Menaxho Staff',
-                  color: AppTheme.primary,
-                  onTap: () async {
-                    await Navigator.push(
+                if (AppSettings.I.zReportEnabled)
+                  _SidebarActionBtn(
+                    icon: Icons.summarize_rounded,
+                    label: 'Z Report',
+                    color: AppTheme.info,
+                    onTap: () => showZReportDialog(context),
+                  ),
+                if (AppSettings.I.zReportEnabled) const SizedBox(height: 8),
+                const SizedBox(height: 8),
+                if (canManageUsers(me.role))
+                  _SidebarActionBtn(
+                    icon: Icons.manage_accounts_rounded,
+                    label: 'Menaxho Staff',
+                    color: AppTheme.primary,
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const ManageUsersScreen(),
+                        ),
+                      );
+                      _load();
+                    },
+                  ),
+                if (canManageUsers(me.role)) const SizedBox(height: 8),
+                if (canSettleWorkers(me.role))
+                  _SidebarActionBtn(
+                    icon: Icons.account_balance_wallet_rounded,
+                    label: 'Barazo Punonjes',
+                    color: AppTheme.success,
+                    onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const ManageUsersScreen(),
+                        builder: (_) => const WaiterSettlementScreen(),
                       ),
-                    );
-                    _load();
-                  },
-                ),
-                const SizedBox(height: 8),
-                _SidebarActionBtn(
-                  icon: Icons.local_bar_rounded,
-                  label: 'Menaxho Produkte',
-                  color: Colors.blue,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const AdminProductsScreen(),
                     ),
                   ),
-                ),
+                const SizedBox(height: 8),
+                if (canManageProducts(me.role))
+                  _SidebarActionBtn(
+                    icon: Icons.local_bar_rounded,
+                    label: 'Menaxho Produkte',
+                    color: Colors.blue,
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const AdminProductsScreen(),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -263,7 +314,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const Text('Administrator', style: AppTheme.caption),
+                      Text(_roleLabel(me.role), style: AppTheme.caption),
                     ],
                   ),
                 ),
@@ -296,19 +347,19 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   Widget _buildBottomNav() {
+    final me = Session.I.current!;
+    final navItems = _navItemsFor(me);
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.surface,
         border: Border(top: BorderSide(color: AppTheme.border)),
       ),
       child: Row(
-        children: _navItems.asMap().entries.map((e) {
-          final i = e.key;
-          final item = e.value;
-          final active = _tab == i;
+        children: navItems.map((item) {
+          final active = _tab == item.$3;
           return Expanded(
             child: GestureDetector(
-              onTap: () => setState(() => _tab = i),
+              onTap: () => setState(() => _tab = item.$3),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
                 padding: const EdgeInsets.symmetric(vertical: 12),
@@ -348,13 +399,17 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   Widget _buildBody() {
+    final me = Session.I.current!;
+    final selectedTab =
+        canAccessSystemSettings(me.role) ? _tab : (_tab > 2 ? 0 : _tab);
+
     if (_loading) {
       return const Center(
         child: CircularProgressIndicator(color: AppTheme.primary),
       );
     }
     return IndexedStack(
-      index: _tab,
+      index: selectedTab,
       children: [
         _OverviewTab(
           waiters: _waiters,
@@ -654,6 +709,16 @@ class _OverviewTab extends StatelessWidget {
                   subtitle: 'Raport i detajuar',
                   color: AppTheme.warning,
                   onTap: onNavigateSales,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _QuickActionCard(
+                  icon: Icons.summarize_rounded,
+                  label: 'Z Report',
+                  subtitle: 'Fundi i ditës',
+                  color: AppTheme.info,
+                  onTap: () => showZReportDialog(context),
                 ),
               ),
               const SizedBox(width: 10),
@@ -2326,3 +2391,6 @@ Future<bool?> _confirmDialog({
     ),
   );
 }
+
+
+

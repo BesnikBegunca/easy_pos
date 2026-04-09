@@ -301,6 +301,28 @@ class TablesDao {
     });
   }
 
+  // ── Market mode: virtual counter table ────────────────────────────────────
+
+  static const String marketTableName = 'Kasa';
+
+  /// Returns the id of the market counter table, creating it if needed.
+  Future<int> getOrCreateMarketTableId() async {
+    final db = await AppDb.I.db;
+    final rows = await db.query(
+      'dining_tables',
+      where: "name=? AND is_active=1",
+      whereArgs: [marketTableName],
+      limit: 1,
+    );
+    if (rows.isNotEmpty) return rows.first['id'] as int;
+    return db.insert('dining_tables', {
+      'name': marketTableName,
+      'status': 'free',
+      'is_active': 1,
+      'created_at': DateTime.now().millisecondsSinceEpoch,
+    });
+  }
+
   Future<List<FullTableRow>> listTablesWithWaiters({int? ownerId}) async {
     final db = await AppDb.I.db;
     final String ownerFilter =

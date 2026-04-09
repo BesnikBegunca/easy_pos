@@ -409,10 +409,12 @@ class _WaiterSettlementScreenState extends State<WaiterSettlementScreen> {
   Widget build(BuildContext context) {
     final me = Session.I.current!;
 
-    if (me.role != UserRole.admin) {
+    if (!canSettleWorkers(me.role)) {
       return Scaffold(
         appBar: AppBar(title: const Text('Settlement / Settle Waiter')),
-        body: const Center(child: Text('Access denied')),
+        body: const Center(
+          child: Text('Access denied. Only Admin/Manager+ can settle workers.'),
+        ),
       );
     }
 
