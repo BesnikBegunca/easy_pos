@@ -1,15 +1,20 @@
 import 'package:easy_pos/screens/manage_users_screen.dart';
 import 'package:flutter/material.dart';
 import 'auth/auth_service.dart';
+import 'auth/license_service.dart';
 import 'auth/roles.dart';
 import 'auth/session.dart';
+import 'screens/license_lock_screen.dart';
+import 'screens/license_manager_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/shell.dart';
+import 'screens/startup_screen.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AuthService.I.ensureSeed();
+  await LicenseService.I.init();
   runApp(const App());
 }
 
@@ -21,8 +26,7 @@ class App extends StatelessWidget {
     if (u == null) return AppTheme.darkOrangeTheme();
 
     if (isHighRole(u.role)) {
-      return ThemeData.dark().copyWith(
-        useMaterial3: true,
+      return ThemeData.dark(useMaterial3: true).copyWith(
         colorScheme: const ColorScheme.dark(
           primary: Color(0xFFFF6B35),
           secondary: Color(0xFF4ECDC4),
@@ -37,8 +41,7 @@ class App extends StatelessWidget {
       );
     }
 
-    return ThemeData.dark().copyWith(
-      useMaterial3: true,
+    return ThemeData.dark(useMaterial3: true).copyWith(
       colorScheme: const ColorScheme.dark(
         primary: AppTheme.primary,
         secondary: AppTheme.orange,
@@ -63,11 +66,13 @@ class App extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: _getRoleTheme(),
-      initialRoute: '/login',
+      home: const StartupScreen(),
       routes: {
         '/login': (_) => const LoginScreen(),
         '/shell': (_) => const ShellScreen(),
         '/manage-users': (_) => const ManageUsersScreen(),
+        '/license-lock': (_) => const LicenseLockScreen(),
+        '/license-manager': (_) => const LicenseManagerScreen(),
       },
     );
   }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../auth/license_service.dart';
 import '../auth/roles.dart';
 import '../auth/session.dart';
 import '../theme/app_theme.dart';
@@ -14,30 +15,18 @@ class ShellScreen extends StatefulWidget {
 }
 
 class _ShellScreenState extends State<ShellScreen> {
-  bool _showDevEntry = false;
-  final TextEditingController _devPinC = TextEditingController();
-
-  void _toggleDevEntry() => setState(() => _showDevEntry = !_showDevEntry);
-
-  Future<void> _enterDevMode() async {
-    final pin = _devPinC.text.trim();
-    if (Session.I.enterDevMode(pin)) {
-      _snack('Developer Mode activated');
-      setState(() => _showDevEntry = false);
-      _devPinC.clear();
-      if (mounted) setState(() {});
-    } else {
-      _snack('Invalid PIN', success: false);
-    }
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkLicense());
   }
 
-  void _snack(String msg, {bool success = true}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor: success ? Colors.green : Colors.red,
-      ),
-    );
+  Future<void> _checkLicense() async {
+    await LicenseService.I.init();
+    if (!mounted) return;
+    if (LicenseService.I.isExpired) {
+      Navigator.of(context).pushReplacementNamed('/license-lock');
+    }
   }
 
   @override
@@ -52,100 +41,7 @@ class _ShellScreenState extends State<ShellScreen> {
       body = const _WaiterShell();
     }
 
-    return Scaffold(
-      backgroundColor: AppTheme.bg,
-      body: Stack(
-        children: [
-          body,
-          if (!_showDevEntry)
-            Positioned(
-              bottom: 30,
-              right: 20,
-              child: GestureDetector(
-                onTap: _toggleDevEntry,
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.9),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.developer_mode,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
-              ),
-            ),
-          if (_showDevEntry)
-            Positioned(
-              bottom: 30,
-              right: 20,
-              child: Material(
-                borderRadius: BorderRadius.circular(16),
-                elevation: 8,
-                child: Container(
-                  width: 280,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: AppTheme.surface,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.red),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.developer_mode,
-                        color: Colors.red,
-                        size: 32,
-                      ),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'Enter Developer Mode',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _devPinC,
-                        obscureText: true,
-                        decoration: InputDecoration(
-                          hintText: 'PIN (dev123)',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        onSubmitted: (_) => _enterDevMode(),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextButton(
-                              onPressed: () {
-                                setState(() => _showDevEntry = false);
-                                _devPinC.clear();
-                              },
-                              child: const Text('Cancel'),
-                            ),
-                          ),
-                          ElevatedButton(
-                            onPressed: _enterDevMode,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
-                            ),
-                            child: const Text('Enter'),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
+    return Scaffold(backgroundColor: AppTheme.bg, body: body);
   }
 }
 

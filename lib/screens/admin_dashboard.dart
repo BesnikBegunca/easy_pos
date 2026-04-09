@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../auth/auth_service.dart';
 import '../auth/dao_users.dart';
+import '../auth/license_service.dart';
 import '../auth/roles.dart';
 import '../auth/session.dart';
 import '../data/dao_orders.dart';
@@ -37,6 +39,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
+      await LicenseService.I.init();
       final all = await UsersDao.I.listUsers();
       final todayTotal = await OrdersDao.I.getTodayTotal();
       final todayOrders = await OrdersDao.I.getTodayOrderCount();
@@ -59,6 +62,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     (Icons.dashboard_rounded, 'Pasqyra'),
     (Icons.groups_rounded, 'Punonjësit'),
     (Icons.table_restaurant_rounded, 'Tavolinat'),
+    (Icons.shield_rounded, 'License'),
     (Icons.settings_rounded, 'Settings'),
   ];
 
@@ -351,6 +355,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         ),
         _StaffTab(waiters: _waiters, onRefresh: _load),
         _TablesTab(onRefresh: _load),
+        const _LicenseStatusTab(),
         const AdminSettingsScreen(),
       ],
     );
@@ -970,6 +975,159 @@ class _IconBtn extends StatelessWidget {
           border: Border.all(color: AppTheme.border),
         ),
         child: Icon(icon, color: AppTheme.textSecondary, size: 18),
+      ),
+    );
+  }
+}
+
+class _LicenseStatusTab extends StatefulWidget {
+  const _LicenseStatusTab();
+
+  @override
+  State<_LicenseStatusTab> createState() => _LicenseStatusTabState();
+}
+
+class _LicenseStatusTabState extends State<_LicenseStatusTab> {
+  late DateTime _now;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _now = DateTime.now();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      setState(() {
+        _now = DateTime.now();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final expiry = LicenseService.I.expirationDate;
+    final activation = LicenseService.I.activationDate;
+    final remaining = expiry == null ? null : expiry.difference(_now);
+    final expired = remaining == null || remaining.isNegative;
+
+    String countdownText() {
+      if (expiry == null) return 'N/A';
+      if (expired) return 'Licenca ka skaduar';
+      final days = remaining!.inDays;
+      final hours = remaining.inHours % 24;
+      final minutes = remaining.inMinutes % 60;
+      final seconds = remaining.inSeconds % 60;
+      return '$days ditë • ${hours.toString().padLeft(2, '0')}:'
+          '${minutes.toString().padLeft(2, '0')}:'
+          '${seconds.toString().padLeft(2, '0')}';
+    }
+
+    Widget detailRow(String label, String value) {
+      return Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(color: AppTheme.textSecondary),
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              color: AppTheme.textPrimary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SectionHeader(
+            title: 'License Status',
+            subtitle: 'Sa ditë ka mbetur deri në skadim',
+            action: _IconBtn(
+              icon: Icons.refresh_rounded,
+              onTap: () => setState(() {}),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.all(26),
+            decoration: BoxDecoration(
+              color: AppTheme.card,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: AppTheme.border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  expired ? 'License Expired' : 'License Active',
+                  style: TextStyle(
+                    color: expired ? AppTheme.error : AppTheme.success,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  countdownText(),
+                  style: const TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 36,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                detailRow(
+                  'Skaduar më',
+                  expiry == null
+                      ? '--'
+                      : '${expiry.day.toString().padLeft(2, '0')}.${expiry.month.toString().padLeft(2, '0')}.${expiry.year}',
+                ),
+                const SizedBox(height: 12),
+                detailRow(
+                  'Aktivuar më',
+                  activation == null
+                      ? '--'
+                      : '${activation.day.toString().padLeft(2, '0')}.${activation.month.toString().padLeft(2, '0')}.${activation.year}',
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () {
+                    if (LicenseService.I.developerAccessGranted) {
+                      Navigator.of(context).pushNamed('/license-manager');
+                    } else {
+                      Navigator.of(context).pushNamed('/license-lock');
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: Text(
+                    LicenseService.I.developerAccessGranted
+                        ? 'Rinovo Licencën'
+                        : 'Hyr si zhvillues për rinovim',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

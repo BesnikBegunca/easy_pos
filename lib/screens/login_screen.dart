@@ -2,7 +2,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../auth/auth_service.dart';
+import '../auth/license_service.dart';
 import '../auth/session.dart';
+import '../auth/roles.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -33,6 +35,17 @@ class _LoginScreenState extends State<LoginScreen>
   void initState() {
     super.initState();
     _fadeCtrl.forward();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _redirectIfExpired();
+    });
+  }
+
+  Future<void> _redirectIfExpired() async {
+    await LicenseService.I.init();
+    if (!mounted) return;
+    if (LicenseService.I.isExpired) {
+      Navigator.of(context).pushReplacementNamed('/license-lock');
+    }
   }
 
   @override
@@ -48,6 +61,13 @@ class _LoginScreenState extends State<LoginScreen>
     if (pass.isEmpty) return;
     setState(() => _loading = true);
     try {
+      await LicenseService.I.init();
+      if (LicenseService.I.isExpired) {
+        if (!mounted) return;
+        Navigator.of(context).pushReplacementNamed('/license-lock');
+        return;
+      }
+
       final u = await AuthService.I.login(pass);
       if (!mounted) return;
       if (u == null) {
@@ -67,21 +87,28 @@ class _LoginScreenState extends State<LoginScreen>
       ..clearSnackBars()
       ..showSnackBar(
         SnackBar(
-          content: Row(children: [
-            const Icon(Icons.error_outline_rounded, color: _kError, size: 18),
-            const SizedBox(width: 10),
-            Text(msg, style: const TextStyle(color: Colors.white)),
-          ]),
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline_rounded, color: _kError, size: 18),
+              const SizedBox(width: 10),
+              Text(msg, style: const TextStyle(color: Colors.white)),
+            ],
+          ),
           backgroundColor: const Color(0xFF1C1C2E),
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           margin: const EdgeInsets.all(16),
         ),
       );
   }
 
   void _shake() {
-    setState(() { _pin = ''; _passC.clear(); });
+    setState(() {
+      _pin = '';
+      _passC.clear();
+    });
     _shakeCtrl.forward(from: 0);
   }
 
@@ -111,7 +138,156 @@ class _LoginScreenState extends State<LoginScreen>
 
   void _onClear() {
     if (_loading) return;
-    setState(() { _pin = ''; _passC.clear(); });
+    setState(() {
+      _pin = '';
+      _passC.clear();
+    });
+  }
+
+  void _showDeveloperLogin() {
+    final devKeyController = TextEditingController();
+    bool devLoading = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          backgroundColor: _kPanel,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              Icon(Icons.developer_mode, color: _kAccent),
+              const SizedBox(width: 12),
+              const Text(
+                'Developer Access',
+                style: TextStyle(color: Colors.white),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Enter developer key to access full system control including license management.',
+                style: TextStyle(color: Colors.white70, fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: devKeyController,
+                obscureText: true,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: 'Developer Key',
+                  hintStyle: TextStyle(color: Colors.white38),
+                  filled: true,
+                  fillColor: _kTile,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: Colors.white.withValues(alpha: 0.1),
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: Colors.white.withValues(alpha: 0.1),
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: _kAccent),
+                  ),
+                ),
+                onSubmitted: (_) => _performDeveloperLogin(
+                  devKeyController.text,
+                  () => setState(() => devLoading = true),
+                  () => setState(() => devLoading = false),
+                  dialogContext,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: devLoading
+                  ? null
+                  : () => Navigator.of(dialogContext).pop(),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: Colors.white70),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: devLoading
+                  ? null
+                  : () => _performDeveloperLogin(
+                      devKeyController.text,
+                      () => setState(() => devLoading = true),
+                      () => setState(() => devLoading = false),
+                      dialogContext,
+                    ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _kAccent,
+                foregroundColor: Colors.white,
+              ),
+              child: devLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Login as Developer'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _performDeveloperLogin(
+    String key,
+    VoidCallback setLoading,
+    VoidCallback setNotLoading,
+    BuildContext dialogContext,
+  ) async {
+    final devKey = key.trim();
+    if (devKey.isEmpty) return;
+
+    final currentContext = context; // Store context before async
+    setLoading();
+    try {
+      await LicenseService.I.init();
+      if (LicenseService.I.isExpired) {
+        if (!mounted) return;
+        Navigator.of(currentContext).pushReplacementNamed('/license-lock');
+        return;
+      }
+
+      final isValid = await LicenseService.I.validateDeveloperKey(devKey);
+      if (!isValid) {
+        _showError('Developer key është i gabuar.');
+        return;
+      }
+
+      // Create a developer user session with admin privileges
+      final devUser = AuthUser(
+        id: 999, // Special developer ID
+        username: 'developer',
+        role: UserRole.admin,
+        fullName: 'Developer Access',
+      );
+      Session.I.setUser(devUser);
+      Session.I.enterDevMode(); // Force developer mode
+
+      if (!mounted) return;
+      Navigator.of(dialogContext).pop(); // Close dialog
+      Navigator.of(currentContext).pushReplacementNamed('/shell');
+    } finally {
+      setNotLoading();
+    }
   }
 
   @override
@@ -127,9 +303,7 @@ class _LoginScreenState extends State<LoginScreen>
           FadeTransition(
             opacity: _fadeCtrl,
             child: SafeArea(
-              child: isWide
-                  ? _buildWideLayout()
-                  : _buildNarrowLayout(),
+              child: isWide ? _buildWideLayout() : _buildNarrowLayout(),
             ),
           ),
         ],
@@ -142,10 +316,7 @@ class _LoginScreenState extends State<LoginScreen>
     return Row(
       children: [
         // Left — Brand panel
-        Expanded(
-          flex: 5,
-          child: _BrandPanel(),
-        ),
+        Expanded(flex: 5, child: _BrandPanel()),
         // Right — Login panel
         Expanded(
           flex: 4,
@@ -177,14 +348,16 @@ class _LoginScreenState extends State<LoginScreen>
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: const [
-                  Text('EasyPOS',
+                  Text(
+                    'EasyPOS',
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w900,
                       fontSize: 16,
                     ),
                   ),
-                  Text('Restaurant System',
+                  Text(
+                    'Restaurant System',
                     style: TextStyle(color: _kTextSub, fontSize: 11),
                   ),
                 ],
@@ -278,7 +451,13 @@ class _LoginScreenState extends State<LoginScreen>
             icon: Icons.grid_view_rounded,
             selected: _pinMode,
             onTap: () {
-              if (!_loading) setState(() { _pinMode = true; _pin = ''; _passC.clear(); });
+              if (!_loading) {
+                setState(() {
+                  _pinMode = true;
+                  _pin = '';
+                  _passC.clear();
+                });
+              }
             },
           ),
           _ToggleBtn(
@@ -286,7 +465,13 @@ class _LoginScreenState extends State<LoginScreen>
             icon: Icons.lock_outline_rounded,
             selected: !_pinMode,
             onTap: () {
-              if (!_loading) setState(() { _pinMode = false; _pin = ''; _passC.clear(); });
+              if (!_loading) {
+                setState(() {
+                  _pinMode = false;
+                  _pin = '';
+                  _passC.clear();
+                });
+              }
             },
           ),
         ],
@@ -348,10 +533,18 @@ class _LoginScreenState extends State<LoginScreen>
         fillColor: _kTile,
         hintText: 'Fjalëkalimi',
         hintStyle: const TextStyle(color: Colors.white38),
-        prefixIcon: const Icon(Icons.lock_outline_rounded, color: Colors.white38, size: 20),
+        prefixIcon: const Icon(
+          Icons.lock_outline_rounded,
+          color: Colors.white38,
+          size: 20,
+        ),
         suffixIcon: IconButton(
           onPressed: _loading ? null : _onClear,
-          icon: const Icon(Icons.close_rounded, color: Colors.white38, size: 18),
+          icon: const Icon(
+            Icons.close_rounded,
+            color: Colors.white38,
+            size: 18,
+          ),
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -370,25 +563,48 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Widget _buildActions() {
-    return Row(
+    return Column(
       children: [
-        Expanded(
-          child: _ActionBtn(
-            label: 'Reset',
-            icon: Icons.restart_alt_rounded,
-            onTap: _loading ? null : _onClear,
-            primary: false,
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: _ActionBtn(
+                label: 'Reset',
+                icon: Icons.restart_alt_rounded,
+                onTap: _loading ? null : _onClear,
+                primary: false,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _ActionBtn(
+                label: _loading ? 'Duke hyrë…' : 'Hyr',
+                icon: _loading
+                    ? Icons.hourglass_empty_rounded
+                    : Icons.arrow_forward_rounded,
+                onTap: _loading
+                    ? null
+                    : () => _loginWithPassword(_pinMode ? _pin : _passC.text),
+                primary: true,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _ActionBtn(
-            label: _loading ? 'Duke hyrë…' : 'Hyr',
-            icon: _loading ? Icons.hourglass_empty_rounded : Icons.arrow_forward_rounded,
-            onTap: _loading
-                ? null
-                : () => _loginWithPassword(_pinMode ? _pin : _passC.text),
-            primary: true,
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: TextButton.icon(
+            onPressed: _loading ? null : _showDeveloperLogin,
+            icon: const Icon(Icons.developer_mode, size: 18),
+            label: const Text('Developer Login'),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.white70,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+              ),
+            ),
           ),
         ),
       ],
@@ -407,34 +623,42 @@ class _BrandPanel extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        border: Border(
-          right: BorderSide(color: Color(0xFF1E2340)),
-        ),
+        border: Border(right: BorderSide(color: Color(0xFF1E2340))),
       ),
       child: Stack(
         children: [
           // Subtle decorative glows
-          Positioned(top: -60, left: -60,
+          Positioned(
+            top: -60,
+            left: -60,
             child: Container(
-              width: 320, height: 320,
+              width: 320,
+              height: 320,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: RadialGradient(colors: [
-                  _kAccent.withValues(alpha: 0.10),
-                  Colors.transparent,
-                ]),
+                gradient: RadialGradient(
+                  colors: [
+                    _kAccent.withValues(alpha: 0.10),
+                    Colors.transparent,
+                  ],
+                ),
               ),
             ),
           ),
-          Positioned(bottom: -80, right: -40,
+          Positioned(
+            bottom: -80,
+            right: -40,
             child: Container(
-              width: 280, height: 280,
+              width: 280,
+              height: 280,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: RadialGradient(colors: [
-                  const Color(0xFF8B5CF6).withValues(alpha: 0.08),
-                  Colors.transparent,
-                ]),
+                gradient: RadialGradient(
+                  colors: [
+                    const Color(0xFF8B5CF6).withValues(alpha: 0.08),
+                    Colors.transparent,
+                  ],
+                ),
               ),
             ),
           ),
@@ -468,24 +692,42 @@ class _BrandPanel extends StatelessWidget {
                   ),
                   const SizedBox(height: 48),
                   ...[
-                    _FeatureRow(icon: Icons.table_restaurant_rounded, label: 'Menaxhim i tavolinave'),
-                    _FeatureRow(icon: Icons.receipt_long_rounded, label: 'Porosi dhe faturim'),
-                    _FeatureRow(icon: Icons.groups_rounded, label: 'Menaxhim i stafit'),
-                    _FeatureRow(icon: Icons.bar_chart_rounded, label: 'Raporte ditore'),
+                    _FeatureRow(
+                      icon: Icons.table_restaurant_rounded,
+                      label: 'Menaxhim i tavolinave',
+                    ),
+                    _FeatureRow(
+                      icon: Icons.receipt_long_rounded,
+                      label: 'Porosi dhe faturim',
+                    ),
+                    _FeatureRow(
+                      icon: Icons.groups_rounded,
+                      label: 'Menaxhim i stafit',
+                    ),
+                    _FeatureRow(
+                      icon: Icons.bar_chart_rounded,
+                      label: 'Raporte ditore',
+                    ),
                   ],
                   const SizedBox(height: 48),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.04),
                       borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.06),
+                      ),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Container(
-                          width: 6, height: 6,
+                          width: 6,
+                          height: 6,
                           decoration: const BoxDecoration(
                             color: Color(0xFF10B981),
                             shape: BoxShape.circle,
@@ -494,7 +736,10 @@ class _BrandPanel extends StatelessWidget {
                         const SizedBox(width: 8),
                         const Text(
                           'v2.0.0 — Premium Edition',
-                          style: TextStyle(color: Color(0xFF8892B0), fontSize: 12),
+                          style: TextStyle(
+                            color: Color(0xFF8892B0),
+                            fontSize: 12,
+                          ),
                         ),
                       ],
                     ),
@@ -521,7 +766,8 @@ class _FeatureRow extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 32, height: 32,
+            width: 32,
+            height: 32,
             decoration: BoxDecoration(
               color: _kAccent.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(8),
@@ -529,7 +775,10 @@ class _FeatureRow extends StatelessWidget {
             child: Icon(icon, color: _kAccent, size: 16),
           ),
           const SizedBox(width: 12),
-          Text(label, style: const TextStyle(color: Color(0xFFCDD5F3), fontSize: 14)),
+          Text(
+            label,
+            style: const TextStyle(color: Color(0xFFCDD5F3), fontSize: 14),
+          ),
         ],
       ),
     );
@@ -543,7 +792,8 @@ class _LogoMark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: size, height: size,
+      width: size,
+      height: size,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
@@ -612,18 +862,23 @@ class _ToggleBtn extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? _kAccent : Colors.transparent,
           borderRadius: BorderRadius.circular(999),
-          boxShadow: selected ? [
-            BoxShadow(
-              color: _kAccent.withValues(alpha: 0.30),
-              blurRadius: 12,
-            ),
-          ] : [],
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: _kAccent.withValues(alpha: 0.30),
+                    blurRadius: 12,
+                  ),
+                ]
+              : [],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 14,
-              color: selected ? Colors.white : const Color(0xFF8892B0)),
+            Icon(
+              icon,
+              size: 14,
+              color: selected ? Colors.white : const Color(0xFF8892B0),
+            ),
             const SizedBox(width: 6),
             Text(
               label,
@@ -665,12 +920,14 @@ class _PinDots extends StatelessWidget {
               color: isFilled ? _kAccent : Colors.white24,
               width: 2,
             ),
-            boxShadow: isFilled ? [
-              BoxShadow(
-                color: _kAccent.withValues(alpha: 0.50),
-                blurRadius: 8,
-              ),
-            ] : [],
+            boxShadow: isFilled
+                ? [
+                    BoxShadow(
+                      color: _kAccent.withValues(alpha: 0.50),
+                      blurRadius: 8,
+                    ),
+                  ]
+                : [],
           ),
         );
       }),
@@ -693,7 +950,18 @@ class _Keypad extends StatelessWidget {
   });
 
   static const _keys = [
-    '1','2','3','4','5','6','7','8','9','C','0','⌫',
+    '1',
+    '2',
+    '3',
+    '4',
+    '5',
+    '6',
+    '7',
+    '8',
+    '9',
+    'C',
+    '0',
+    '⌫',
   ];
 
   @override
@@ -707,15 +975,22 @@ class _Keypad extends StatelessWidget {
           runSpacing: 8,
           children: _keys.map((k) {
             return SizedBox(
-              width: tileW, height: tileH,
+              width: tileW,
+              height: tileH,
               child: _KeyTile(
                 label: k,
                 enabled: enabled,
                 onTap: () {
-                  if (!enabled) { return; }
-                  if (k == '⌫') { onBackspace(); }
-                  else if (k == 'C') { onClear(); }
-                  else { onDigit(k); }
+                  if (!enabled) {
+                    return;
+                  }
+                  if (k == '⌫') {
+                    onBackspace();
+                  } else if (k == 'C') {
+                    onClear();
+                  } else {
+                    onDigit(k);
+                  }
                 },
               ),
             );
@@ -730,7 +1005,11 @@ class _KeyTile extends StatelessWidget {
   final String label;
   final bool enabled;
   final VoidCallback onTap;
-  const _KeyTile({required this.label, required this.enabled, required this.onTap});
+  const _KeyTile({
+    required this.label,
+    required this.enabled,
+    required this.onTap,
+  });
 
   bool get _isSpecial => label == '⌫' || label == 'C';
 
@@ -741,11 +1020,17 @@ class _KeyTile extends StatelessWidget {
 
     Widget content;
     if (isBackspace) {
-      content = Icon(Icons.backspace_outlined,
-        color: enabled ? Colors.white70 : Colors.white24, size: 20);
+      content = Icon(
+        Icons.backspace_outlined,
+        color: enabled ? Colors.white70 : Colors.white24,
+        size: 20,
+      );
     } else if (isClear) {
-      content = Icon(Icons.refresh_rounded,
-        color: enabled ? const Color(0xFFEF4444) : Colors.white24, size: 20);
+      content = Icon(
+        Icons.refresh_rounded,
+        color: enabled ? const Color(0xFFEF4444) : Colors.white24,
+        size: 20,
+      );
     } else {
       content = Text(
         label,
@@ -766,9 +1051,7 @@ class _KeyTile extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 100),
           decoration: BoxDecoration(
-            color: _isSpecial
-                ? Colors.white.withValues(alpha: 0.03)
-                : _kTile,
+            color: _isSpecial ? Colors.white.withValues(alpha: 0.03) : _kTile,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: Colors.white.withValues(alpha: _isSpecial ? 0.04 : 0.07),
@@ -814,13 +1097,15 @@ class _ActionBtn extends StatelessWidget {
           border: !primary
               ? Border.all(color: Colors.white.withValues(alpha: 0.07))
               : null,
-          boxShadow: primary && onTap != null ? [
-            BoxShadow(
-              color: _kAccent.withValues(alpha: 0.35),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ] : [],
+          boxShadow: primary && onTap != null
+              ? [
+                  BoxShadow(
+                    color: _kAccent.withValues(alpha: 0.35),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ]
+              : [],
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -834,7 +1119,8 @@ class _ActionBtn extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            Icon(icon,
+            Icon(
+              icon,
               color: onTap == null ? Colors.white30 : Colors.white,
               size: 18,
             ),
@@ -846,9 +1132,9 @@ class _ActionBtn extends StatelessWidget {
 }
 
 // ── Colors ────────────────────────────────────────────────────────────────────
-const _kBg    = Color(0xFF07080F);
+const _kBg = Color(0xFF07080F);
 const _kPanel = Color(0xFF0D0F1C);
-const _kTile  = Color(0xFF161929);
+const _kTile = Color(0xFF161929);
 const _kAccent = Color(0xFF6366F1);
-const _kError  = Color(0xFFEF4444);
+const _kError = Color(0xFFEF4444);
 const _kTextSub = Color(0xFF8892B0);

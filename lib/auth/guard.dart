@@ -24,9 +24,7 @@ void requireDevMode(BuildContext context) {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Developer Mode Required'),
-        content: const Text(
-          'This feature requires Developer Mode (dev123 PIN).',
-        ),
+        content: const Text('This feature requires Developer Mode access.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),

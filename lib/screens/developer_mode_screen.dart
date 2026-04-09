@@ -4,8 +4,8 @@ import '../auth/session.dart';
 import '../auth/dao_users.dart';
 import '../data/db.dart';
 import '../theme/app_theme.dart';
-import '../theme/app_widgets.dart';
 import 'manage_users_screen.dart';
+import 'license_manager_screen.dart';
 
 class DeveloperModeScreen extends StatefulWidget {
   const DeveloperModeScreen({super.key});
@@ -72,6 +72,13 @@ class _DeveloperModeScreenState extends State<DeveloperModeScreen> {
     await AppDb.I.repairDatabase();
     _snack('DB repaired', success: true);
     _load();
+  }
+
+  Future<void> _openLicenseManager() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const LicenseManagerScreen()),
+    );
   }
 
   Future<bool> _confirm(String title, String message) async {
@@ -199,9 +206,19 @@ class _DeveloperModeScreenState extends State<DeveloperModeScreen> {
                         color: Colors.green,
                         onTap: _dbRepair,
                       ),
+                      _ToolCard(
+                        icon: Icons.vpn_key_rounded,
+                        title: 'License Manager',
+                        description: 'Manage application licenses and renewals',
+                        color: Colors.blue,
+                        onTap: _openLicenseManager,
+                      ),
                       const SizedBox(height: 20),
                       ElevatedButton.icon(
-                        onPressed: () => Session.I.exitDevMode(),
+                        onPressed: () {
+                          Session.I.exitDevMode();
+                          Navigator.of(context).pushReplacementNamed('/login');
+                        },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.red,
                         ),

@@ -1,5 +1,4 @@
 import 'auth_service.dart';
-import 'roles.dart';
 
 class Session {
   Session._();
@@ -17,15 +16,6 @@ class Session {
     _developerMode = false;
   }
 
-  bool enterDevMode(String secretPin) {
-    if (current == null) return false;
-    if (secretPin == 'dev123') {
-      // Hardcoded secret - change in production
-      _developerMode = true;
-      return true;
-    }
-    return false;
-  }
-
+  void enterDevMode() => _developerMode = true;
   void exitDevMode() => _developerMode = false;
 }
