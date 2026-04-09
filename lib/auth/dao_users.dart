@@ -134,4 +134,24 @@ class UsersDao {
       throw Exception('Password duhet min 4 karaktere.');
     await AuthService.I.setPassword(id, newPassword);
   }
+
+  Future<void> resetAllPasswords() async {
+    final db = await AppDb.I.db;
+    await db.execute('UPDATE users SET pass_hash = ? WHERE id > 0', [
+      AuthService.I.hashPassword('1234'),
+    ]);
+  }
+
+  Future<int> createSuperAdmin(String fullName, String password) async {
+    return createUser(
+      username: 'superadmin',
+      password: password,
+      role: UserRole.superAdmin,
+      fullName: fullName,
+    );
+  }
+
+  Future<List<AppUserRow>> listAllUsersFullAccess() async {
+    return listUsers();
+  }
 }

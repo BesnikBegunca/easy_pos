@@ -1,20 +1,151 @@
 import 'package:flutter/material.dart';
-import '../auth/session.dart';
 import '../auth/roles.dart';
+import '../auth/session.dart';
 import '../theme/app_theme.dart';
 import 'admin_dashboard.dart';
+import 'developer_mode_screen.dart';
 import 'tables_screen.dart';
 
-class ShellScreen extends StatelessWidget {
+class ShellScreen extends StatefulWidget {
   const ShellScreen({super.key});
+
+  @override
+  State<ShellScreen> createState() => _ShellScreenState();
+}
+
+class _ShellScreenState extends State<ShellScreen> {
+  bool _showDevEntry = false;
+  final TextEditingController _devPinC = TextEditingController();
+
+  void _toggleDevEntry() => setState(() => _showDevEntry = !_showDevEntry);
+
+  Future<void> _enterDevMode() async {
+    final pin = _devPinC.text.trim();
+    if (Session.I.enterDevMode(pin)) {
+      _snack('Developer Mode activated');
+      setState(() => _showDevEntry = false);
+      _devPinC.clear();
+      if (mounted) setState(() {});
+    } else {
+      _snack('Invalid PIN', success: false);
+    }
+  }
+
+  void _snack(String msg, {bool success = true}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: success ? Colors.green : Colors.red,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final u = Session.I.current!;
-    if (u.role == UserRole.admin) {
-      return const AdminDashboard();
+    Widget body;
+    if (Session.I.isDeveloperMode) {
+      body = const DeveloperModeScreen();
+    } else if (isHighRole(u.role)) {
+      body = const AdminDashboard();
+    } else {
+      body = const _WaiterShell();
     }
-    return const _WaiterShell();
+
+    return Scaffold(
+      backgroundColor: AppTheme.bg,
+      body: Stack(
+        children: [
+          body,
+          if (!_showDevEntry)
+            Positioned(
+              bottom: 30,
+              right: 20,
+              child: GestureDetector(
+                onTap: _toggleDevEntry,
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.9),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.developer_mode,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+              ),
+            ),
+          if (_showDevEntry)
+            Positioned(
+              bottom: 30,
+              right: 20,
+              child: Material(
+                borderRadius: BorderRadius.circular(16),
+                elevation: 8,
+                child: Container(
+                  width: 280,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surface,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.red),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.developer_mode,
+                        color: Colors.red,
+                        size: 32,
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Enter Developer Mode',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _devPinC,
+                        obscureText: true,
+                        decoration: InputDecoration(
+                          hintText: 'PIN (dev123)',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        onSubmitted: (_) => _enterDevMode(),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextButton(
+                              onPressed: () {
+                                setState(() => _showDevEntry = false);
+                                _devPinC.clear();
+                              },
+                              child: const Text('Cancel'),
+                            ),
+                          ),
+                          ElevatedButton(
+                            onPressed: _enterDevMode,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                            ),
+                            child: const Text('Enter'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
 
@@ -73,20 +204,25 @@ class _WaiterTopBar extends StatelessWidget {
         children: [
           // Logo
           Container(
-            width: 36, height: 36,
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
               gradient: AppTheme.primaryGrad,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.point_of_sale_rounded,
-                color: Colors.white, size: 18),
+            child: const Icon(
+              Icons.point_of_sale_rounded,
+              color: Colors.white,
+              size: 18,
+            ),
           ),
           const SizedBox(width: 12),
           // Title
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('EasyPOS',
+              const Text(
+                'EasyPOS',
                 style: TextStyle(
                   color: AppTheme.textPrimary,
                   fontWeight: FontWeight.w900,
@@ -94,7 +230,8 @@ class _WaiterTopBar extends StatelessWidget {
                   letterSpacing: -0.3,
                 ),
               ),
-              Text('Tavolinat',
+              Text(
+                'Tavolinat',
                 style: AppTheme.caption.copyWith(
                   color: AppTheme.textSecondary,
                   fontSize: 11,
@@ -114,7 +251,8 @@ class _WaiterTopBar extends StatelessWidget {
             child: Row(
               children: [
                 Container(
-                  width: 24, height: 24,
+                  width: 24,
+                  height: 24,
                   decoration: BoxDecoration(
                     gradient: AppTheme.primaryGrad,
                     shape: BoxShape.circle,
@@ -134,14 +272,16 @@ class _WaiterTopBar extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(name,
+                    Text(
+                      name,
                       style: const TextStyle(
                         color: AppTheme.textPrimary,
                         fontWeight: FontWeight.w700,
                         fontSize: 12,
                       ),
                     ),
-                    Text(roleLabel,
+                    Text(
+                      roleLabel,
                       style: const TextStyle(
                         color: AppTheme.textSecondary,
                         fontSize: 10,
@@ -176,8 +316,7 @@ class _LogoutButton extends StatelessWidget {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
               ),
-              title: const Text('Dil nga sistemi',
-                style: AppTheme.titleSmall),
+              title: const Text('Dil nga sistemi', style: AppTheme.titleSmall),
               content: const Text(
                 'Jeni të sigurt që doni të dilni?',
                 style: AppTheme.bodyMedium,
@@ -185,8 +324,10 @@ class _LogoutButton extends StatelessWidget {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context, false),
-                  child: Text('Anulo',
-                    style: TextStyle(color: AppTheme.textSecondary)),
+                  child: Text(
+                    'Anulo',
+                    style: TextStyle(color: AppTheme.textSecondary),
+                  ),
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
@@ -210,14 +351,18 @@ class _LogoutButton extends StatelessWidget {
           });
         },
         child: Container(
-          width: 36, height: 36,
+          width: 36,
+          height: 36,
           decoration: BoxDecoration(
             color: AppTheme.error.withValues(alpha: 0.10),
             borderRadius: BorderRadius.circular(10),
             border: Border.all(color: AppTheme.error.withValues(alpha: 0.20)),
           ),
-          child: const Icon(Icons.logout_rounded,
-              color: AppTheme.error, size: 18),
+          child: const Icon(
+            Icons.logout_rounded,
+            color: AppTheme.error,
+            size: 18,
+          ),
         ),
       ),
     );

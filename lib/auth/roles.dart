@@ -1,7 +1,11 @@
-enum UserRole { admin, manager, waiter }
+enum UserRole { developer, superAdmin, admin, manager, waiter }
 
 UserRole roleFromString(String v) {
   switch (v) {
+    case 'developer':
+      return UserRole.developer;
+    case 'superAdmin':
+      return UserRole.superAdmin;
     case 'admin':
       return UserRole.admin;
     case 'manager':
@@ -13,6 +17,10 @@ UserRole roleFromString(String v) {
 
 String roleToString(UserRole r) {
   switch (r) {
+    case UserRole.developer:
+      return 'developer';
+    case UserRole.superAdmin:
+      return 'superAdmin';
     case UserRole.admin:
       return 'admin';
     case UserRole.manager:
@@ -22,5 +30,31 @@ String roleToString(UserRole r) {
   }
 }
 
-bool canViewReports(UserRole r) => r == UserRole.admin || r == UserRole.manager;
-bool canManageUsers(UserRole r) => r == UserRole.admin;
+bool canViewReports(UserRole r) =>
+    r == UserRole.developer ||
+    r == UserRole.superAdmin ||
+    r == UserRole.admin ||
+    r == UserRole.manager;
+bool canManageUsers(UserRole r) =>
+    r == UserRole.developer || r == UserRole.superAdmin || r == UserRole.admin;
+
+bool canAccessDevMode(UserRole r) => r == UserRole.developer;
+bool canCreateAdmin(UserRole r) =>
+    r == UserRole.developer || r == UserRole.superAdmin;
+bool canEditOrders(UserRole r) =>
+    r == UserRole.developer ||
+    r == UserRole.superAdmin ||
+    r == UserRole.admin ||
+    r == UserRole.manager;
+bool isHighRole(UserRole r) =>
+    r == UserRole.developer || r == UserRole.superAdmin || r == UserRole.admin;
+
+int roleLevel(UserRole r) {
+  return switch (r) {
+    UserRole.developer => 5,
+    UserRole.superAdmin => 4,
+    UserRole.admin => 3,
+    UserRole.manager => 2,
+    UserRole.waiter => 1,
+  };
+}

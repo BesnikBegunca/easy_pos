@@ -109,6 +109,57 @@ class OrdersDao {
         .toList();
   }
 
+  /// Returns only already-printed items for the given order (read-only display).
+  Future<List<OrderLine>> getPrintedLines(int orderId) async {
+    final db = await AppDb.I.db;
+    final rows = await db.rawQuery(
+      '''
+      SELECT oi.id AS item_id, oi.product_id, p.name AS product_name,
+             oi.qty, oi.unit_price_cents, oi.line_total_cents, oi.note
+      FROM order_items oi
+      JOIN products p ON p.id = oi.product_id
+      WHERE oi.order_id = ? AND oi.is_printed = 1
+      ORDER BY oi.id ASC
+      ''',
+      [orderId],
+    );
+    return rows
+        .map(
+          (e) => OrderLine(
+            itemId: e['item_id'] as int,
+            productId: e['product_id'] as int,
+            name: (e['product_name'] as String?) ?? 'Unknown',
+            qty: (e['qty'] as int?) ?? 0,
+            unitPriceCents: (e['unit_price_cents'] as int?) ?? 0,
+            lineTotalCents: (e['line_total_cents'] as int?) ?? 0,
+            note: e['note'] as String?,
+          ),
+        )
+        .toList();
+  }
+
+  /// Inserts a batch of new items into the order and marks them as printed.
+  /// Each map must have keys: productId (int), qty (int), unitPriceCents (int).
+  Future<void> addNewItemsBatch({
+    required int orderId,
+    required List<Map<String, int>> items,
+  }) async {
+    if (items.isEmpty) return;
+    final db = await AppDb.I.db;
+    for (final item in items) {
+      await db.insert('order_items', {
+        'order_id': orderId,
+        'product_id': item['productId']!,
+        'qty': item['qty']!,
+        'unit_price_cents': item['unitPriceCents']!,
+        'line_total_cents': item['qty']! * item['unitPriceCents']!,
+        'note': null,
+        'is_printed': 1,
+      });
+    }
+    await _recalcOrderTotal(orderId);
+  }
+
   Future<int> getOrderTotalCents(int orderId) async {
     final db = await AppDb.I.db;
     final rows = await db.rawQuery(

@@ -1,6 +1,8 @@
 import 'package:easy_pos/screens/manage_users_screen.dart';
 import 'package:flutter/material.dart';
 import 'auth/auth_service.dart';
+import 'auth/roles.dart';
+import 'auth/session.dart';
 import 'screens/login_screen.dart';
 import 'screens/shell.dart';
 import 'theme/app_theme.dart';
@@ -14,28 +16,53 @@ void main() async {
 class App extends StatelessWidget {
   const App({super.key});
 
+  ThemeData _getRoleTheme() {
+    final u = Session.I.current;
+    if (u == null) return AppTheme.darkOrangeTheme();
+
+    if (isHighRole(u.role)) {
+      return ThemeData.dark().copyWith(
+        useMaterial3: true,
+        colorScheme: const ColorScheme.dark(
+          primary: Color(0xFFFF6B35),
+          secondary: Color(0xFF4ECDC4),
+          surface: AppTheme.surface,
+        ).copyWith(surface: AppTheme.surface, onSurface: AppTheme.textPrimary),
+        scaffoldBackgroundColor: const Color(0xFF0F0F23),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF1A1A2E),
+          foregroundColor: Colors.white,
+          elevation: 0,
+        ),
+      );
+    }
+
+    return ThemeData.dark().copyWith(
+      useMaterial3: true,
+      colorScheme: const ColorScheme.dark(
+        primary: AppTheme.primary,
+        secondary: AppTheme.orange,
+        surface: AppTheme.surface,
+      ).copyWith(onSurface: AppTheme.textPrimary),
+      primaryColor: AppTheme.primary,
+      scaffoldBackgroundColor: AppTheme.background,
+      textTheme: ThemeData.dark().textTheme.apply(
+        bodyColor: Colors.white,
+        displayColor: Colors.white,
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: AppTheme.surface,
+        foregroundColor: Colors.white,
+      ),
+      iconTheme: const IconThemeData(color: Colors.white70),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark().copyWith(
-        useMaterial3: true,
-        colorScheme: ColorScheme.dark(
-          primary: AppTheme.primary,
-          secondary: AppTheme.violet,
-        ),
-        primaryColor: AppTheme.primary,
-        scaffoldBackgroundColor: AppTheme.background,
-        textTheme: ThemeData.dark().textTheme.apply(
-          bodyColor: Colors.white,
-          displayColor: Colors.white,
-        ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: AppTheme.surface,
-          foregroundColor: Colors.white,
-        ),
-        iconTheme: const IconThemeData(color: Colors.white70),
-      ),
+      theme: _getRoleTheme(),
       initialRoute: '/login',
       routes: {
         '/login': (_) => const LoginScreen(),

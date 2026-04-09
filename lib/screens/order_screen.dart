@@ -29,8 +29,11 @@ class _OrderScreenState extends State<OrderScreen> {
   bool _loading = true;
   String? _error;
   int _orderId = 0;
-  List<OrderLine> _lines = [];
-  int _totalCents = 0;
+
+  // Printed items from DB — shown as read-only
+  List<OrderLine> _printedLines = [];
+  // New items added this session — kept in memory until PRINTO / PAGUAJ
+  final List<_PendingItem> _pendingItems = [];
 
   List<CategoryRow> _categories = [];
   int? _selectedCategoryId;
@@ -38,7 +41,12 @@ class _OrderScreenState extends State<OrderScreen> {
   int _productColumns = SettingsDao.defaultProductColumns;
 
   final _searchC = TextEditingController();
-  final Set<int> _busy = {};
+
+  int get _printedTotal =>
+      _printedLines.fold(0, (s, l) => s + l.lineTotalCents);
+  int get _pendingTotal =>
+      _pendingItems.fold(0, (s, i) => s + i.lineTotalCents);
+  int get _totalCents => _printedTotal + _pendingTotal;
 
   @override
   void initState() {
@@ -69,29 +77,14 @@ class _OrderScreenState extends State<OrderScreen> {
         SettingsDao.productGridColumns,
         SettingsDao.defaultProductColumns,
       );
-      await Future.wait([_reloadProducts(), _refreshCart()]);
+      final printed = await OrdersDao.I.getPrintedLines(_orderId);
+      await _reloadProducts();
+      if (mounted) setState(() => _printedLines = printed);
     } catch (e) {
       _error = e.toString();
     } finally {
-      if (mounted) {
-        setState(() => _loading = false);
-      }
+      if (mounted) setState(() => _loading = false);
     }
-  }
-
-  Future<void> _refreshCart() async {
-    if (_orderId == 0) {
-      return;
-    }
-    final lines = await OrdersDao.I.getOrderLines(_orderId);
-    final total = await OrdersDao.I.getOrderTotalCents(_orderId);
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _lines = lines;
-      _totalCents = total;
-    });
   }
 
   Future<void> _reloadProducts() async {
@@ -99,108 +92,98 @@ class _OrderScreenState extends State<OrderScreen> {
       categoryId: _selectedCategoryId,
       search: _searchC.text,
     );
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
     setState(() => _products = prods);
   }
 
-  Future<void> _addProduct(ProductRow p) async {
-    await OrdersDao.I.addProductToOrder(
+  // Adds to local pending list — nothing goes to DB yet.
+  void _addProduct(ProductRow p) {
+    setState(() {
+      final idx = _pendingItems.indexWhere((i) => i.productId == p.id);
+      if (idx >= 0) {
+        _pendingItems[idx].qty++;
+      } else {
+        _pendingItems.add(_PendingItem(
+          productId: p.id,
+          productName: p.name,
+          unitPriceCents: p.priceCents,
+        ));
+      }
+    });
+  }
+
+  void _incrementPending(int idx) {
+    setState(() => _pendingItems[idx].qty++);
+  }
+
+  void _decrementPending(int idx) {
+    setState(() {
+      if (_pendingItems[idx].qty <= 1) {
+        _pendingItems.removeAt(idx);
+      } else {
+        _pendingItems[idx].qty--;
+      }
+    });
+  }
+
+  void _removePending(int idx) {
+    setState(() => _pendingItems.removeAt(idx));
+  }
+
+  // Saves _pendingItems to DB as printed rows.
+  Future<void> _commitPending() async {
+    if (_pendingItems.isEmpty) return;
+    await OrdersDao.I.addNewItemsBatch(
       orderId: _orderId,
-      productId: p.id,
-      unitPriceCents: p.priceCents,
+      items: _pendingItems
+          .map<Map<String, int>>((i) => {
+                'productId': i.productId,
+                'qty': i.qty,
+                'unitPriceCents': i.unitPriceCents,
+              })
+          .toList(),
     );
-    await _refreshCart();
   }
 
-  Future<void> _incrementLine(OrderLine line) async {
-    if (_busy.contains(line.itemId)) {
-      return;
-    }
-    setState(() => _busy.add(line.itemId));
-    try {
-      await OrdersDao.I.setItemQty(
-        itemId: line.itemId,
-        orderId: _orderId,
-        newQty: line.qty + 1,
-      );
-      await _refreshCart();
-    } finally {
-      if (mounted) {
-        setState(() => _busy.remove(line.itemId));
-      }
-    }
-  }
-
-  Future<void> _decrementLine(OrderLine line) async {
-    if (_busy.contains(line.itemId)) {
-      return;
-    }
-    setState(() => _busy.add(line.itemId));
-    try {
-      await OrdersDao.I.setItemQty(
-        itemId: line.itemId,
-        orderId: _orderId,
-        newQty: line.qty - 1,
-      );
-      await _refreshCart();
-    } finally {
-      if (mounted) {
-        setState(() => _busy.remove(line.itemId));
-      }
-    }
-  }
-
-  Future<void> _removeLine(OrderLine line) async {
-    if (_busy.contains(line.itemId)) {
-      return;
-    }
-    setState(() => _busy.add(line.itemId));
-    try {
-      await OrdersDao.I.removeOrderItem(line.itemId, _orderId);
-      await _refreshCart();
-    } finally {
-      if (mounted) {
-        setState(() => _busy.remove(line.itemId));
-      }
-    }
-  }
-
-  // ── PRINTO: dërgon në kuzhinë + kthen te login ──────────────────────────
+  // ── PRINTO: salvo pending → DB, logout ────────────────────────────────────
   Future<void> _onPrinto() async {
-    if (_lines.isEmpty) {
-      _showSnack('Shporta është bosh.', color: AppTheme.warning);
+    if (_pendingItems.isEmpty) {
+      _showSnack('Shto produkte fillimisht.', color: AppTheme.warning);
       return;
     }
-
     try {
-      await OrdersDao.I.markItemsAsPrinted(_orderId);
-      if (!mounted) {
-        return;
-      }
-
+      await _commitPending();
+      if (!mounted) return;
       _showSnack(
         'Porosia u dërgua. Kamarieri u logout.',
         color: const Color(0xFF3B82F6),
       );
-
       Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
     } catch (e) {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       _showSnack('Gabim gjatë printimit: $e', color: AppTheme.error);
     }
   }
 
-  // ── PAGUAJ: mbyll, tregon faturën ────────────────────────────────────────
+  // ── PAGUAJ: commit pending (if any) → pay ────────────────────────────────
   Future<void> _onPay() async {
-    if (_lines.isEmpty) {
+    if (_printedLines.isEmpty && _pendingItems.isEmpty) {
       _showSnack('Shporta është bosh.', color: AppTheme.warning);
       return;
     }
-    final linesSnapshot = List<OrderLine>.from(_lines);
+
+    // Build receipt lines before committing (pending still in memory here)
+    final receiptLines = [
+      ..._printedLines,
+      ..._pendingItems.map((i) => OrderLine(
+            itemId: 0,
+            productId: i.productId,
+            name: i.productName,
+            qty: i.qty,
+            unitPriceCents: i.unitPriceCents,
+            lineTotalCents: i.lineTotalCents,
+          )),
+    ];
     final totalSnapshot = _totalCents;
 
     final method = await showDialog<String>(
@@ -216,6 +199,7 @@ class _OrderScreenState extends State<OrderScreen> {
     }
 
     try {
+      await _commitPending();
       await OrdersDao.I.payAndClose(
         orderId: _orderId,
         tableId: widget.tableId,
@@ -230,7 +214,7 @@ class _OrderScreenState extends State<OrderScreen> {
         barrierDismissible: false,
         builder: (_) => _ReceiptDialog(
           tableName: widget.tableName,
-          lines: linesSnapshot,
+          lines: receiptLines,
           totalCents: totalSnapshot,
           paymentMethod: method,
         ),
@@ -568,7 +552,7 @@ class _OrderScreenState extends State<OrderScreen> {
                 const SizedBox(width: 10),
                 Text('Porosia', style: AppTheme.titleSmall),
                 const Spacer(),
-                if (_lines.isNotEmpty)
+                if (_pendingItems.isNotEmpty)
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8,
@@ -579,7 +563,7 @@ class _OrderScreenState extends State<OrderScreen> {
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: Text(
-                      '${_lines.length}',
+                      '+${_pendingItems.length}',
                       style: const TextStyle(
                         color: AppTheme.primary,
                         fontWeight: FontWeight.w800,
@@ -593,7 +577,7 @@ class _OrderScreenState extends State<OrderScreen> {
 
           // Lines
           Expanded(
-            child: _lines.isEmpty
+            child: (_printedLines.isEmpty && _pendingItems.isEmpty)
                 ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -619,12 +603,32 @@ class _OrderScreenState extends State<OrderScreen> {
                       ],
                     ),
                   )
-                : ListView.separated(
+                : ListView(
                     padding: const EdgeInsets.symmetric(vertical: 6),
-                    itemCount: _lines.length,
-                    separatorBuilder: (_, i) =>
-                        const PremiumDivider(indent: 16),
-                    itemBuilder: (_, i) => _buildCartLine(_lines[i]),
+                    children: [
+                      // ── Printed (read-only) ─────────────────────────
+                      if (_printedLines.isNotEmpty) ...[
+                        _cartSectionHeader(
+                          icon: Icons.lock_outline_rounded,
+                          label: 'Printuara',
+                          color: AppTheme.textMuted,
+                        ),
+                        ..._printedLines.map((l) => _buildPrintedLine(l)),
+                        const PremiumDivider(indent: 0),
+                      ],
+                      // ── Pending (editable) ──────────────────────────
+                      if (_pendingItems.isNotEmpty) ...[
+                        _cartSectionHeader(
+                          icon: Icons.pending_outlined,
+                          label: 'Të reja',
+                          color: AppTheme.primary,
+                        ),
+                        ...List.generate(
+                          _pendingItems.length,
+                          (i) => _buildPendingLine(i),
+                        ),
+                      ],
+                    ],
                   ),
           ),
 
@@ -638,7 +642,6 @@ class _OrderScreenState extends State<OrderScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Total row
                 Row(
                   children: [
                     Text(
@@ -662,7 +665,6 @@ class _OrderScreenState extends State<OrderScreen> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                // PRINTO
                 GradientButton(
                   label: 'PRINTO',
                   icon: Icons.print_rounded,
@@ -671,17 +673,18 @@ class _OrderScreenState extends State<OrderScreen> {
                   gradient: const LinearGradient(
                     colors: [Color(0xFF2563EB), Color(0xFF3B82F6)],
                   ),
-                  onTap: _lines.isNotEmpty ? _onPrinto : null,
+                  onTap: _pendingItems.isNotEmpty ? _onPrinto : null,
                 ),
                 const SizedBox(height: 8),
-                // PAGUAJ
                 GradientButton(
                   label: 'PAGUAJ',
                   icon: Icons.payments_rounded,
                   height: 52,
                   fontSize: 15,
                   gradient: AppTheme.successGrad,
-                  onTap: _lines.isNotEmpty ? _onPay : null,
+                  onTap: (_printedLines.isNotEmpty || _pendingItems.isNotEmpty)
+                      ? _onPay
+                      : null,
                 ),
               ],
             ),
@@ -691,34 +694,55 @@ class _OrderScreenState extends State<OrderScreen> {
     );
   }
 
-  Widget _buildCartLine(OrderLine line) {
-    final isBusy = _busy.contains(line.itemId);
+  Widget _cartSectionHeader({
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Qty badge
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 5),
+          Text(
+            label.toUpperCase(),
+            style: TextStyle(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPrintedLine(OrderLine line) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        children: [
           Container(
-            width: 28,
-            height: 28,
+            width: 26,
+            height: 26,
             decoration: BoxDecoration(
-              color: AppTheme.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(8),
+              color: AppTheme.textMuted.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(7),
             ),
             child: Center(
               child: Text(
                 '${line.qty}',
                 style: const TextStyle(
-                  color: AppTheme.primary,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 12,
+                  color: AppTheme.textMuted,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 11,
                 ),
               ),
             ),
           ),
           const SizedBox(width: 10),
-          // Name + unit price
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -729,6 +753,7 @@ class _OrderScreenState extends State<OrderScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: AppTheme.bodyMedium.copyWith(
                     fontWeight: FontWeight.w600,
+                    color: AppTheme.textSecondary,
                   ),
                 ),
                 Text(
@@ -738,42 +763,96 @@ class _OrderScreenState extends State<OrderScreen> {
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          // Qty controls
-          _QtyControl(
-            qty: line.qty,
-            busy: isBusy,
-            onDecrement: () => _decrementLine(line),
-            onIncrement: () => _incrementLine(line),
+          Text(
+            moneyFromCents(line.lineTotalCents),
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textSecondary,
+            ),
           ),
-          const SizedBox(width: 8),
-          // Line total
+          const SizedBox(width: 4),
+          const Icon(Icons.lock_outline_rounded, size: 12, color: AppTheme.textMuted),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPendingLine(int idx) {
+    final item = _pendingItems[idx];
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 26,
+            height: 26,
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(7),
+            ),
+            child: Center(
+              child: Text(
+                '${item.qty}',
+                style: const TextStyle(
+                  color: AppTheme.primary,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 11,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.productName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTheme.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+                ),
+                Text(
+                  moneyFromCents(item.unitPriceCents),
+                  style: AppTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 6),
+          _QtyControl(
+            qty: item.qty,
+            busy: false,
+            onDecrement: () => _decrementPending(idx),
+            onIncrement: () => _incrementPending(idx),
+          ),
+          const SizedBox(width: 6),
           SizedBox(
-            width: 58,
+            width: 52,
             child: Text(
-              moneyFromCents(line.lineTotalCents),
+              moneyFromCents(item.lineTotalCents),
               textAlign: TextAlign.right,
               style: const TextStyle(
-                fontSize: 13,
+                fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: AppTheme.textPrimary,
               ),
             ),
           ),
-          // Remove
           GestureDetector(
-            onTap: isBusy ? null : () => _removeLine(line),
+            onTap: () => _removePending(idx),
             child: Container(
               margin: const EdgeInsets.only(left: 4),
-              width: 26,
-              height: 26,
+              width: 24,
+              height: 24,
               decoration: BoxDecoration(
                 color: AppTheme.error.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Icon(
                 Icons.close_rounded,
-                size: 13,
+                size: 12,
                 color: AppTheme.error.withValues(alpha: 0.70),
               ),
             ),
@@ -897,12 +976,12 @@ class _OrderScreenState extends State<OrderScreen> {
   }
 
   Widget _buildProductCard(ProductRow p) {
-    final cartLine = _lines.cast<OrderLine?>().firstWhere(
-      (l) => l?.productId == p.id,
+    final pending = _pendingItems.cast<_PendingItem?>().firstWhere(
+      (i) => i?.productId == p.id,
       orElse: () => null,
     );
-    final inCart = cartLine != null;
-    final qty = cartLine?.qty ?? 0;
+    final inCart = pending != null;
+    final qty = pending?.qty ?? 0;
 
     return Material(
       color: Colors.transparent,
@@ -1065,6 +1144,22 @@ class _QtyControl extends StatelessWidget {
       ),
     );
   }
+}
+
+// ── Pending item (in-memory, not yet saved to DB) ─────────────────────────────
+class _PendingItem {
+  final int productId;
+  final String productName;
+  final int unitPriceCents;
+  int qty = 1;
+
+  _PendingItem({
+    required this.productId,
+    required this.productName,
+    required this.unitPriceCents,
+  });
+
+  int get lineTotalCents => qty * unitPriceCents;
 }
 
 // ── Payment dialog ────────────────────────────────────────────────────────────

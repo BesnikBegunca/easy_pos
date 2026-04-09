@@ -40,14 +40,18 @@ class _AdminDashboardState extends State<AdminDashboard> {
       final all = await UsersDao.I.listUsers();
       final todayTotal = await OrdersDao.I.getTodayTotal();
       final todayOrders = await OrdersDao.I.getTodayOrderCount();
-      if (!mounted) { return; }
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _waiters = all.where((u) => u.role == UserRole.waiter).toList();
         _todayTotal = todayTotal;
         _todayOrders = todayOrders;
       });
     } finally {
-      if (mounted) { setState(() => _loading = false); }
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -61,10 +65,26 @@ class _AdminDashboardState extends State<AdminDashboard> {
   @override
   Widget build(BuildContext context) {
     final me = Session.I.current!;
-    if (me.role != UserRole.admin) {
-      return const Scaffold(
+    if (!isHighRole(me.role)) {
+      return Scaffold(
         backgroundColor: AppTheme.bg,
-        body: Center(child: Text('Access denied', style: AppTheme.bodyMedium)),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.admin_panel_settings_outlined,
+                size: 64,
+                color: AppTheme.textSecondary,
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Only Admin+ roles can access this dashboard',
+                style: AppTheme.bodyMedium,
+              ),
+            ],
+          ),
+        ),
       );
     }
 
@@ -117,21 +137,28 @@ class _AdminDashboardState extends State<AdminDashboard> {
             child: Row(
               children: [
                 Container(
-                  width: 42, height: 42,
+                  width: 42,
+                  height: 42,
                   decoration: BoxDecoration(
                     gradient: AppTheme.primaryGrad,
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: AppTheme.shadowGlowColor(
-                        AppTheme.primary, a: 0.35),
+                      AppTheme.primary,
+                      a: 0.35,
+                    ),
                   ),
-                  child: const Icon(Icons.point_of_sale_rounded,
-                      color: Colors.white, size: 20),
+                  child: const Icon(
+                    Icons.point_of_sale_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('EasyPOS',
+                    const Text(
+                      'EasyPOS',
                       style: TextStyle(
                         color: AppTheme.textPrimary,
                         fontWeight: FontWeight.w900,
@@ -139,8 +166,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         letterSpacing: -0.3,
                       ),
                     ),
-                    Text('Admin Panel',
-                        style: AppTheme.caption),
+                    Text('Admin Panel', style: AppTheme.caption),
                   ],
                 ),
               ],
@@ -172,9 +198,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   icon: Icons.bar_chart_rounded,
                   label: 'Shitjet e Ditës',
                   color: AppTheme.warning,
-                  onTap: () => Navigator.push(context,
-                    MaterialPageRoute(
-                        builder: (_) => const DailySalesScreen())),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const DailySalesScreen()),
+                  ),
                 ),
                 const SizedBox(height: 8),
                 _SidebarActionBtn(
@@ -182,9 +209,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   label: 'Menaxho Staff',
                   color: AppTheme.primary,
                   onTap: () async {
-                    await Navigator.push(context,
+                    await Navigator.push(
+                      context,
                       MaterialPageRoute(
-                          builder: (_) => const ManageUsersScreen()));
+                        builder: (_) => const ManageUsersScreen(),
+                      ),
+                    );
                     _load();
                   },
                 ),
@@ -212,11 +242,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       Text(
                         name,
                         style: AppTheme.bodyMedium.copyWith(
-                            fontWeight: FontWeight.w700),
+                          fontWeight: FontWeight.w700,
+                        ),
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const Text('Administrator',
-                          style: AppTheme.caption),
+                      const Text('Administrator', style: AppTheme.caption),
                     ],
                   ),
                 ),
@@ -224,17 +254,20 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   borderRadius: BorderRadius.circular(8),
                   onTap: () {
                     Session.I.logout();
-                    Navigator.of(context)
-                        .pushReplacementNamed('/login');
+                    Navigator.of(context).pushReplacementNamed('/login');
                   },
                   child: Container(
-                    width: 30, height: 30,
+                    width: 30,
+                    height: 30,
                     decoration: BoxDecoration(
                       color: AppTheme.error.withValues(alpha: 0.10),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.logout_rounded,
-                        color: AppTheme.error, size: 16),
+                    child: const Icon(
+                      Icons.logout_rounded,
+                      color: AppTheme.error,
+                      size: 16,
+                    ),
                   ),
                 ),
               ],
@@ -273,22 +306,18 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(item.$1,
-                      color: active
-                          ? AppTheme.primary
-                          : AppTheme.textMuted,
+                    Icon(
+                      item.$1,
+                      color: active ? AppTheme.primary : AppTheme.textMuted,
                       size: 22,
                     ),
                     const SizedBox(height: 4),
-                    Text(item.$2,
+                    Text(
+                      item.$2,
                       style: TextStyle(
-                        color: active
-                            ? AppTheme.primary
-                            : AppTheme.textMuted,
+                        color: active ? AppTheme.primary : AppTheme.textMuted,
                         fontSize: 11,
-                        fontWeight: active
-                            ? FontWeight.w700
-                            : FontWeight.w500,
+                        fontWeight: active ? FontWeight.w700 : FontWeight.w500,
                       ),
                     ),
                   ],
@@ -315,8 +344,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
           todayTotal: _todayTotal,
           todayOrders: _todayOrders,
           onRefresh: _load,
-          onNavigateSales: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const DailySalesScreen())),
+          onNavigateSales: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const DailySalesScreen()),
+          ),
         ),
         _StaffTab(waiters: _waiters, onRefresh: _load),
         _TablesTab(onRefresh: _load),
@@ -364,25 +395,25 @@ class _SidebarNavItem extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(icon,
+            Icon(
+              icon,
               color: active ? AppTheme.primary : AppTheme.textMuted,
               size: 18,
             ),
             const SizedBox(width: 12),
-            Text(label,
+            Text(
+              label,
               style: TextStyle(
-                color: active
-                    ? AppTheme.primaryLight
-                    : AppTheme.textSecondary,
-                fontWeight:
-                    active ? FontWeight.w700 : FontWeight.w500,
+                color: active ? AppTheme.primaryLight : AppTheme.textSecondary,
+                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
                 fontSize: 14,
               ),
             ),
             if (active) ...[
               const Spacer(),
               Container(
-                width: 4, height: 4,
+                width: 4,
+                height: 4,
                 decoration: BoxDecoration(
                   color: AppTheme.primary,
                   shape: BoxShape.circle,
@@ -424,7 +455,8 @@ class _SidebarActionBtn extends StatelessWidget {
           children: [
             Icon(icon, color: color, size: 16),
             const SizedBox(width: 10),
-            Text(label,
+            Text(
+              label,
               style: TextStyle(
                 color: color,
                 fontWeight: FontWeight.w700,
@@ -432,8 +464,11 @@ class _SidebarActionBtn extends StatelessWidget {
               ),
             ),
             const Spacer(),
-            Icon(Icons.arrow_forward_ios_rounded,
-                color: color.withValues(alpha: 0.50), size: 12),
+            Icon(
+              Icons.arrow_forward_ios_rounded,
+              color: color.withValues(alpha: 0.50),
+              size: 12,
+            ),
           ],
         ),
       ),
@@ -451,7 +486,8 @@ class _Avatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final letter = name.isNotEmpty ? name[0].toUpperCase() : '?';
     return Container(
-      width: size, height: size,
+      width: size,
+      height: size,
       decoration: BoxDecoration(
         gradient: AppTheme.primaryGrad,
         borderRadius: BorderRadius.circular(size / 3),
@@ -496,9 +532,10 @@ class _OverviewTab extends StatelessWidget {
     final me = Session.I.current!;
     final greeting = hour < 12
         ? 'Mirëmëngjes'
-        : hour < 18 ? 'Mirëdita' : 'Mirëmbrëma';
-    final firstName =
-        me.fullName?.split(' ').first ?? me.username;
+        : hour < 18
+        ? 'Mirëdita'
+        : 'Mirëmbrëma';
+    final firstName = me.fullName?.split(' ').first ?? me.username;
 
     return RefreshIndicator(
       onRefresh: () async => onRefresh(),
@@ -514,11 +551,10 @@ class _OverviewTab extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('$greeting, $firstName!',
-                      style: AppTheme.titleLarge,
-                    ),
+                    Text('$greeting, $firstName!', style: AppTheme.titleLarge),
                     const SizedBox(height: 4),
-                    Text(_formatDate(DateTime.now()),
+                    Text(
+                      _formatDate(DateTime.now()),
                       style: AppTheme.bodySmall,
                     ),
                   ],
@@ -528,7 +564,8 @@ class _OverviewTab extends StatelessWidget {
                 children: [
                   const LiveDot(),
                   const SizedBox(width: 6),
-                  const Text('Live',
+                  const Text(
+                    'Live',
                     style: TextStyle(
                       color: AppTheme.success,
                       fontWeight: FontWeight.w700,
@@ -536,10 +573,7 @@ class _OverviewTab extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 14),
-                  _IconBtn(
-                    icon: Icons.refresh_rounded,
-                    onTap: onRefresh,
-                  ),
+                  _IconBtn(icon: Icons.refresh_rounded, onTap: onRefresh),
                 ],
               ),
             ],
@@ -557,26 +591,32 @@ class _OverviewTab extends StatelessWidget {
           // ── Stat row ───────────────────────────────────────────────────────
           Row(
             children: [
-              Expanded(child: PremiumStatCard(
-                label: 'Punonjës',
-                value: '${waiters.length}',
-                icon: Icons.people_alt_rounded,
-                color: AppTheme.primary,
-              )),
+              Expanded(
+                child: PremiumStatCard(
+                  label: 'Punonjës',
+                  value: '${waiters.length}',
+                  icon: Icons.people_alt_rounded,
+                  color: AppTheme.primary,
+                ),
+              ),
               const SizedBox(width: 10),
-              Expanded(child: PremiumStatCard(
-                label: 'Aktiv',
-                value: '$_activeCount',
-                icon: Icons.play_circle_rounded,
-                color: AppTheme.success,
-              )),
+              Expanded(
+                child: PremiumStatCard(
+                  label: 'Aktiv',
+                  value: '$_activeCount',
+                  icon: Icons.play_circle_rounded,
+                  color: AppTheme.success,
+                ),
+              ),
               const SizedBox(width: 10),
-              Expanded(child: PremiumStatCard(
-                label: 'Jo aktiv',
-                value: '${waiters.length - _activeCount}',
-                icon: Icons.pause_circle_rounded,
-                color: AppTheme.warning,
-              )),
+              Expanded(
+                child: PremiumStatCard(
+                  label: 'Jo aktiv',
+                  value: '${waiters.length - _activeCount}',
+                  icon: Icons.pause_circle_rounded,
+                  color: AppTheme.warning,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 24),
@@ -605,9 +645,12 @@ class _OverviewTab extends StatelessWidget {
                   label: 'Menaxho Staff',
                   subtitle: 'CRUD punonjës',
                   color: AppTheme.primary,
-                  onTap: () => Navigator.push(context,
+                  onTap: () => Navigator.push(
+                    context,
                     MaterialPageRoute(
-                        builder: (_) => const ManageUsersScreen())),
+                      builder: (_) => const ManageUsersScreen(),
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -631,8 +674,18 @@ class _OverviewTab extends StatelessWidget {
 
   String _formatDate(DateTime dt) {
     const months = [
-      'Janar','Shkurt','Mars','Prill','Maj','Qershor',
-      'Korrik','Gusht','Shtator','Tetor','Nëntor','Dhjetor',
+      'Janar',
+      'Shkurt',
+      'Mars',
+      'Prill',
+      'Maj',
+      'Qershor',
+      'Korrik',
+      'Gusht',
+      'Shtator',
+      'Tetor',
+      'Nëntor',
+      'Dhjetor',
     ];
     return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
   }
@@ -660,8 +713,7 @@ class _HeroCard extends StatelessWidget {
           end: Alignment.bottomRight,
         ),
         borderRadius: AppTheme.radiusLarge,
-        border: Border.all(
-            color: AppTheme.primary.withValues(alpha: 0.25)),
+        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.25)),
         boxShadow: AppTheme.shadowGlowColor(AppTheme.primary, a: 0.10),
       ),
       child: Column(
@@ -671,18 +723,22 @@ class _HeroCard extends StatelessWidget {
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 5),
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: AppTheme.success.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(999),
                   border: Border.all(
-                      color: AppTheme.success.withValues(alpha: 0.30)),
+                    color: AppTheme.success.withValues(alpha: 0.30),
+                  ),
                 ),
                 child: Row(
                   children: [
                     const LiveDot(color: AppTheme.success, size: 7),
                     const SizedBox(width: 6),
-                    const Text('Live Today',
+                    const Text(
+                      'Live Today',
                       style: TextStyle(
                         color: AppTheme.success,
                         fontWeight: FontWeight.w700,
@@ -695,11 +751,9 @@ class _HeroCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          const Text('Total Shitjet Sot',
-            style: TextStyle(
-              color: AppTheme.textSecondary,
-              fontSize: 13,
-            ),
+          const Text(
+            'Total Shitjet Sot',
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
           ),
           const SizedBox(height: 6),
           Text(
@@ -756,16 +810,19 @@ class _HeroMini extends StatelessWidget {
         children: [
           Icon(icon, color: AppTheme.textSecondary, size: 14),
           const SizedBox(width: 6),
-          Text(label,
-              style: const TextStyle(
-                  color: AppTheme.textSecondary, fontSize: 12)),
+          Text(
+            label,
+            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+          ),
           const SizedBox(width: 4),
-          Text(value,
-              style: const TextStyle(
-                color: AppTheme.textPrimary,
-                fontWeight: FontWeight.w800,
-                fontSize: 13,
-              )),
+          Text(
+            value,
+            style: const TextStyle(
+              color: AppTheme.textPrimary,
+              fontWeight: FontWeight.w800,
+              fontSize: 13,
+            ),
+          ),
         ],
       ),
     );
@@ -803,7 +860,8 @@ class _QuickActionCard extends StatelessWidget {
         child: Row(
           children: [
             Container(
-              width: 40, height: 40,
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
                 color: color.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(10),
@@ -815,16 +873,21 @@ class _QuickActionCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(label,
-                    style: AppTheme.bodyMedium
-                        .copyWith(fontWeight: FontWeight.w700),
+                  Text(
+                    label,
+                    style: AppTheme.bodyMedium.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   Text(subtitle, style: AppTheme.caption),
                 ],
               ),
             ),
-            Icon(Icons.arrow_forward_ios_rounded,
-                color: color.withValues(alpha: 0.50), size: 13),
+            Icon(
+              Icons.arrow_forward_ios_rounded,
+              color: color.withValues(alpha: 0.50),
+              size: 13,
+            ),
           ],
         ),
       ),
@@ -839,7 +902,9 @@ class _WaiterSummaryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final name = w.fullName?.trim().isNotEmpty == true ? w.fullName! : w.username;
+    final name = w.fullName?.trim().isNotEmpty == true
+        ? w.fullName!
+        : w.username;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -853,9 +918,9 @@ class _WaiterSummaryRow extends StatelessWidget {
           _Avatar(name: name, size: 32),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(name,
-              style: AppTheme.bodyMedium
-                  .copyWith(fontWeight: FontWeight.w600),
+            child: Text(
+              name,
+              style: AppTheme.bodyMedium.copyWith(fontWeight: FontWeight.w600),
             ),
           ),
           Container(
@@ -874,9 +939,7 @@ class _WaiterSummaryRow extends StatelessWidget {
             child: Text(
               w.isOnShift ? 'Aktiv' : 'Jo aktiv',
               style: TextStyle(
-                color: w.isOnShift
-                    ? AppTheme.success
-                    : AppTheme.textMuted,
+                color: w.isOnShift ? AppTheme.success : AppTheme.textMuted,
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
               ),
@@ -899,7 +962,8 @@ class _IconBtn extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 38, height: 38,
+        width: 38,
+        height: 38,
         decoration: BoxDecoration(
           color: AppTheme.card,
           borderRadius: BorderRadius.circular(10),
@@ -937,7 +1001,9 @@ class _StaffTabState extends State<_StaffTab> {
             title: 'Punonjësit',
             subtitle: 'Menaxho shifts dhe barazimet',
             action: _IconBtn(
-                icon: Icons.refresh_rounded, onTap: widget.onRefresh),
+              icon: Icons.refresh_rounded,
+              onTap: widget.onRefresh,
+            ),
           ),
           const SizedBox(height: 20),
           if (widget.waiters.isEmpty)
@@ -946,10 +1012,9 @@ class _StaffTabState extends State<_StaffTab> {
               message: 'Nuk ka punonjës të regjistruar.',
             )
           else
-            ...widget.waiters.map((w) => _WaiterCard(
-                  waiter: w,
-                  onRefresh: widget.onRefresh,
-                )),
+            ...widget.waiters.map(
+              (w) => _WaiterCard(waiter: w, onRefresh: widget.onRefresh),
+            ),
         ],
       ),
     );
@@ -990,7 +1055,8 @@ class _WaiterCardState extends State<_WaiterCard> {
     setState(() => _loadingStats = true);
     try {
       final now = DateTime.now().millisecondsSinceEpoch;
-      final startMs = widget.waiter.shiftStartedAt ??
+      final startMs =
+          widget.waiter.shiftStartedAt ??
           DateTime.now()
               .subtract(const Duration(hours: 12))
               .millisecondsSinceEpoch;
@@ -999,15 +1065,20 @@ class _WaiterCardState extends State<_WaiterCard> {
         startMs: startMs,
         endMs: now,
       );
-      final orders =
-          await OrdersDao.I.countOpenOrdersByWaiter(widget.waiter.id);
-      if (!mounted) { return; }
+      final orders = await OrdersDao.I.countOpenOrdersByWaiter(
+        widget.waiter.id,
+      );
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _unsettled = totals['total'] ?? 0;
         _openOrders = orders;
       });
     } finally {
-      if (mounted) { setState(() => _loadingStats = false); }
+      if (mounted) {
+        setState(() => _loadingStats = false);
+      }
     }
   }
 
@@ -1022,7 +1093,10 @@ class _WaiterCardState extends State<_WaiterCard> {
       barrierDismissible: false,
       builder: (_) => _SettleDialog(
         waiter: widget.waiter,
-        onDone: () { widget.onRefresh(); _loadStats(); },
+        onDone: () {
+          widget.onRefresh();
+          _loadStats();
+        },
       ),
     );
   }
@@ -1036,17 +1110,20 @@ class _WaiterCardState extends State<_WaiterCard> {
       confirmLabel: 'Mbyll',
       confirmColor: AppTheme.error,
     );
-    if (ok != true) { return; }
+    if (ok != true) {
+      return;
+    }
     await TablesDao.I.closeAllTablesForWaiter(widget.waiter.id);
-    if (!mounted) { return; }
+    if (!mounted) {
+      return;
+    }
     _snack('Tavolinat u mbyllën.');
     widget.onRefresh();
     _loadStats();
   }
 
   void _snack(String msg) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   String _dname(AppUserRow w) =>
@@ -1085,7 +1162,8 @@ class _WaiterCardState extends State<_WaiterCard> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(name,
+                      Text(
+                        name,
                         style: AppTheme.titleSmall,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1093,7 +1171,8 @@ class _WaiterCardState extends State<_WaiterCard> {
                       Row(
                         children: [
                           Container(
-                            width: 7, height: 7,
+                            width: 7,
+                            height: 7,
                             decoration: BoxDecoration(
                               color: shiftColor,
                               shape: BoxShape.circle,
@@ -1119,7 +1198,9 @@ class _WaiterCardState extends State<_WaiterCard> {
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 8),
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: w.isOnShift
                           ? AppTheme.error.withValues(alpha: 0.10)
@@ -1150,7 +1231,9 @@ class _WaiterCardState extends State<_WaiterCard> {
             const Padding(
               padding: EdgeInsets.only(bottom: 12),
               child: LinearProgressIndicator(
-                  color: AppTheme.primary, minHeight: 2),
+                color: AppTheme.primary,
+                minHeight: 2,
+              ),
             )
           else
             Padding(
@@ -1184,8 +1267,7 @@ class _WaiterCardState extends State<_WaiterCard> {
               ),
               border: Border(top: BorderSide(color: AppTheme.border)),
             ),
-            padding: const EdgeInsets.symmetric(
-                horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
               children: [
                 Expanded(
@@ -1244,15 +1326,15 @@ class _MiniStat extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(value,
+                  Text(
+                    value,
                     style: TextStyle(
                       color: color,
                       fontWeight: FontWeight.w800,
                       fontSize: 13,
                     ),
                   ),
-                  Text(label,
-                    style: AppTheme.caption.copyWith(fontSize: 10)),
+                  Text(label, style: AppTheme.caption.copyWith(fontSize: 10)),
                 ],
               ),
             ),
@@ -1291,7 +1373,8 @@ class _CardActionBtn extends StatelessWidget {
           children: [
             Icon(icon, color: color, size: 14),
             const SizedBox(width: 6),
-            Text(label,
+            Text(
+              label,
               style: TextStyle(
                 color: color,
                 fontWeight: FontWeight.w700,
@@ -1330,10 +1413,14 @@ class _TablesTabState extends State<_TablesTab> {
     setState(() => _loading = true);
     try {
       final tables = await TablesDao.I.listOpenTables();
-      if (!mounted) { return; }
+      if (!mounted) {
+        return;
+      }
       setState(() => _tables = tables);
     } finally {
-      if (mounted) { setState(() => _loading = false); }
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -1341,24 +1428,27 @@ class _TablesTabState extends State<_TablesTab> {
     final ok = await _confirmDialog(
       context: context,
       title: 'Mbyll ${t.name}',
-      message:
-          'Tavolina do të mbyllet dhe porositë e hapura do të anulohen.',
+      message: 'Tavolina do të mbyllet dhe porositë e hapura do të anulohen.',
       confirmLabel: 'Mbyll',
       confirmColor: AppTheme.error,
     );
-    if (ok != true) { return; }
+    if (ok != true) {
+      return;
+    }
     await TablesDao.I.closeTableForcefully(t.id);
-    if (!mounted) { return; }
-    ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${t.name} u mbyll.')));
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('${t.name} u mbyll.')));
     _load();
     widget.onRefresh();
   }
 
   @override
   Widget build(BuildContext context) {
-    final totalCents =
-        _tables.fold<int>(0, (s, t) => s + t.openTotalCents);
+    final totalCents = _tables.fold<int>(0, (s, t) => s + t.openTotalCents);
 
     return RefreshIndicator(
       onRefresh: () async => _load(),
@@ -1387,24 +1477,29 @@ class _TablesTabState extends State<_TablesTab> {
                 ),
                 borderRadius: AppTheme.borderRadius,
                 border: Border.all(
-                    color: AppTheme.warning.withValues(alpha: 0.30)),
+                  color: AppTheme.warning.withValues(alpha: 0.30),
+                ),
                 boxShadow: AppTheme.shadowGlowColor(AppTheme.warning, a: 0.08),
               ),
               child: Row(
                 children: [
                   IconBadge(
-                      icon: Icons.receipt_long_rounded,
-                      color: AppTheme.warning,
-                      size: 44,
-                      iconSize: 22),
+                    icon: Icons.receipt_long_rounded,
+                    color: AppTheme.warning,
+                    size: 44,
+                    iconSize: 22,
+                  ),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('${_tables.length} tavolinë aktive',
-                            style: AppTheme.caption),
-                        const Text('Faturimi Total',
+                        Text(
+                          '${_tables.length} tavolinë aktive',
+                          style: AppTheme.caption,
+                        ),
+                        const Text(
+                          'Faturimi Total',
                           style: TextStyle(
                             color: AppTheme.textPrimary,
                             fontWeight: FontWeight.w700,
@@ -1441,10 +1536,9 @@ class _TablesTabState extends State<_TablesTab> {
               message: 'Nuk ka tavolina aktive për momentin.',
             )
           else
-            ..._tables.map((t) => _ActiveTableCard(
-                  table: t,
-                  onClose: () => _closeTable(t),
-                )),
+            ..._tables.map(
+              (t) => _ActiveTableCard(table: t, onClose: () => _closeTable(t)),
+            ),
         ],
       ),
     );
@@ -1471,13 +1565,17 @@ class _ActiveTableCard extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 44, height: 44,
+            width: 44,
+            height: 44,
             decoration: BoxDecoration(
               color: AppTheme.warning.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.restaurant_rounded,
-                color: AppTheme.warning, size: 20),
+            child: const Icon(
+              Icons.restaurant_rounded,
+              color: AppTheme.warning,
+              size: 20,
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -1490,7 +1588,8 @@ class _ActiveTableCard extends StatelessWidget {
                   children: [
                     LiveDot(color: AppTheme.warning, size: 6),
                     const SizedBox(width: 5),
-                    Text('E Hapur',
+                    Text(
+                      'E Hapur',
                       style: const TextStyle(
                         color: AppTheme.warning,
                         fontSize: 11,
@@ -1498,11 +1597,16 @@ class _ActiveTableCard extends StatelessWidget {
                       ),
                     ),
                     if (table.waiterName != null) ...[
-                      const Text(' · ',
+                      const Text(
+                        ' · ',
                         style: TextStyle(
-                            color: AppTheme.textMuted, fontSize: 11)),
+                          color: AppTheme.textMuted,
+                          fontSize: 11,
+                        ),
+                      ),
                       Flexible(
-                        child: Text(table.waiterName!,
+                        child: Text(
+                          table.waiterName!,
                           style: AppTheme.bodySmall,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -1529,20 +1633,27 @@ class _ActiveTableCard extends StatelessWidget {
                 onTap: onClose,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 6),
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: AppTheme.error.withValues(alpha: 0.10),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                        color: AppTheme.error.withValues(alpha: 0.25)),
+                      color: AppTheme.error.withValues(alpha: 0.25),
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: const [
-                      Icon(Icons.close_rounded,
-                          color: AppTheme.error, size: 12),
+                      Icon(
+                        Icons.close_rounded,
+                        color: AppTheme.error,
+                        size: 12,
+                      ),
                       SizedBox(width: 4),
-                      Text('Mbyll',
+                      Text(
+                        'Mbyll',
                         style: TextStyle(
                           color: AppTheme.error,
                           fontWeight: FontWeight.w700,
@@ -1574,34 +1685,33 @@ class _SettleDialog extends StatefulWidget {
 }
 
 class _SettleDialogState extends State<_SettleDialog> {
-  final _actualCashC  = TextEditingController();
-  final _premiumC     = TextEditingController();
-  final _notesC       = TextEditingController();
-  bool _loading       = true;
-  bool _confirming    = false;
+  final _actualCashC = TextEditingController();
+  final _premiumC = TextEditingController();
+  final _notesC = TextEditingController();
+  bool _loading = true;
+  bool _confirming = false;
   Map<String, int> _totals = {};
 
-  int get _total         => _totals['total'] ?? 0;
-  int get _cash          => _totals['cash'] ?? 0;
-  int get _card          => _totals['card'] ?? 0;
-  int get _expectedCash  => _totals['expectedCash'] ?? 0;
+  int get _total => _totals['total'] ?? 0;
+  int get _cash => _totals['cash'] ?? 0;
+  int get _card => _totals['card'] ?? 0;
+  int get _expectedCash => _totals['expectedCash'] ?? 0;
 
   int get _actualCashCents {
-    final v = double.tryParse(
-        _actualCashC.text.trim().replaceAll(',', '.')) ?? 0;
+    final v =
+        double.tryParse(_actualCashC.text.trim().replaceAll(',', '.')) ?? 0;
     return (v * 100).round();
   }
+
   int get _premiumCents {
-    final v = double.tryParse(
-        _premiumC.text.trim().replaceAll(',', '.')) ?? 0;
+    final v = double.tryParse(_premiumC.text.trim().replaceAll(',', '.')) ?? 0;
     return (v * 100).round();
   }
+
   int get _difference => _actualCashCents - _expectedCash;
   int get _startMs =>
       widget.waiter.shiftStartedAt ??
-      DateTime.now()
-          .subtract(const Duration(hours: 12))
-          .millisecondsSinceEpoch;
+      DateTime.now().subtract(const Duration(hours: 12)).millisecondsSinceEpoch;
 
   @override
   void initState() {
@@ -1626,18 +1736,24 @@ class _SettleDialogState extends State<_SettleDialog> {
         startMs: _startMs,
         endMs: now,
       );
-      if (!mounted) { return; }
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _totals = data;
         _actualCashC.text = (_expectedCash / 100).toStringAsFixed(2);
       });
     } finally {
-      if (mounted) { setState(() => _loading = false); }
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
   Future<void> _confirm() async {
-    if (_confirming) { return; }
+    if (_confirming) {
+      return;
+    }
     setState(() => _confirming = true);
     try {
       final now = DateTime.now().millisecondsSinceEpoch;
@@ -1654,22 +1770,30 @@ class _SettleDialogState extends State<_SettleDialog> {
         notes: _notesC.text.trim().isEmpty ? null : _notesC.text.trim(),
         settledBy: Session.I.current!.id,
       );
-      if (!mounted) { return; }
+      if (!mounted) {
+        return;
+      }
       Navigator.pop(context);
       widget.onDone();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '${widget.waiter.fullName ?? widget.waiter.username} u barazua.'),
+            '${widget.waiter.fullName ?? widget.waiter.username} u barazua.',
+          ),
           backgroundColor: AppTheme.successDim,
         ),
       );
     } catch (e) {
-      if (!mounted) { return; }
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Gabim: $e')));
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gabim: $e')));
     } finally {
-      if (mounted) { setState(() => _confirming = false); }
+      if (mounted) {
+        setState(() => _confirming = false);
+      }
     }
   }
 
@@ -1695,29 +1819,38 @@ class _SettleDialogState extends State<_SettleDialog> {
               Row(
                 children: [
                   Container(
-                    width: 48, height: 48,
+                    width: 48,
+                    height: 48,
                     decoration: BoxDecoration(
                       gradient: AppTheme.primaryGrad,
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    child: const Icon(Icons.account_balance_wallet_rounded,
-                        color: Colors.white, size: 22),
+                    child: const Icon(
+                      Icons.account_balance_wallet_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Barazo Punonjësin',
-                            style: AppTheme.titleSmall),
+                        const Text(
+                          'Barazo Punonjësin',
+                          style: AppTheme.titleSmall,
+                        ),
                         Text(name, style: AppTheme.bodySmall),
                       ],
                     ),
                   ),
                   GestureDetector(
                     onTap: () => Navigator.pop(context),
-                    child: const Icon(Icons.close_rounded,
-                        color: AppTheme.textSecondary, size: 22),
+                    child: const Icon(
+                      Icons.close_rounded,
+                      color: AppTheme.textSecondary,
+                      size: 22,
+                    ),
                   ),
                 ],
               ),
@@ -1727,8 +1860,7 @@ class _SettleDialogState extends State<_SettleDialog> {
                 const Center(
                   child: Padding(
                     padding: EdgeInsets.all(24),
-                    child: CircularProgressIndicator(
-                        color: AppTheme.primary),
+                    child: CircularProgressIndicator(color: AppTheme.primary),
                   ),
                 )
               else ...[
@@ -1742,16 +1874,24 @@ class _SettleDialogState extends State<_SettleDialog> {
                   ),
                   child: Column(
                     children: [
-                      _InfoRow('Total Shitje',
-                          moneyFromCents(_total), AppTheme.textPrimary),
-                      _InfoRow('Cash',
-                          moneyFromCents(_cash), AppTheme.success),
-                      _InfoRow('Kartë/Mix',
-                          moneyFromCents(_card), AppTheme.primary),
+                      _InfoRow(
+                        'Total Shitje',
+                        moneyFromCents(_total),
+                        AppTheme.textPrimary,
+                      ),
+                      _InfoRow('Cash', moneyFromCents(_cash), AppTheme.success),
+                      _InfoRow(
+                        'Kartë/Mix',
+                        moneyFromCents(_card),
+                        AppTheme.primary,
+                      ),
                       const PremiumDivider(),
                       const SizedBox(height: 8),
-                      _InfoRow('Cash Pritshmëri',
-                          moneyFromCents(_expectedCash), AppTheme.warning),
+                      _InfoRow(
+                        'Cash Pritshmëri',
+                        moneyFromCents(_expectedCash),
+                        AppTheme.warning,
+                      ),
                     ],
                   ),
                 ),
@@ -1763,7 +1903,8 @@ class _SettleDialogState extends State<_SettleDialog> {
                   label: 'Cash Reale (€)',
                   prefixIcon: Icons.euro_rounded,
                   keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true),
+                    decimal: true,
+                  ),
                   onChanged: (_) => setState(() {}),
                 ),
                 const SizedBox(height: 10),
@@ -1785,9 +1926,12 @@ class _SettleDialogState extends State<_SettleDialog> {
                   ),
                   child: Row(
                     children: [
-                      Text('Diferenca',
-                          style: AppTheme.bodyMedium
-                              .copyWith(color: AppTheme.textSecondary)),
+                      Text(
+                        'Diferenca',
+                        style: AppTheme.bodyMedium.copyWith(
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
                       const Spacer(),
                       Text(
                         (_difference >= 0 ? '+' : '') +
@@ -1812,17 +1956,22 @@ class _SettleDialogState extends State<_SettleDialog> {
                     color: AppTheme.warning.withValues(alpha: 0.06),
                     borderRadius: AppTheme.borderRadius,
                     border: Border.all(
-                        color: AppTheme.warning.withValues(alpha: 0.20)),
+                      color: AppTheme.warning.withValues(alpha: 0.20),
+                    ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: const [
-                          Icon(Icons.workspace_premium_rounded,
-                              color: AppTheme.warning, size: 15),
+                          Icon(
+                            Icons.workspace_premium_rounded,
+                            color: AppTheme.warning,
+                            size: 15,
+                          ),
                           SizedBox(width: 6),
-                          Text('Premium / Bonus',
+                          Text(
+                            'Premium / Bonus',
                             style: TextStyle(
                               color: AppTheme.warning,
                               fontWeight: FontWeight.w700,
@@ -1837,7 +1986,8 @@ class _SettleDialogState extends State<_SettleDialog> {
                         label: 'Premium (€) - opsionale',
                         prefixIcon: Icons.workspace_premium_outlined,
                         keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true),
+                          decimal: true,
+                        ),
                         onChanged: (_) => setState(() {}),
                       ),
                     ],
@@ -1861,12 +2011,16 @@ class _SettleDialogState extends State<_SettleDialog> {
                     color: AppTheme.error.withValues(alpha: 0.06),
                     borderRadius: AppTheme.radiusSmall,
                     border: Border.all(
-                        color: AppTheme.error.withValues(alpha: 0.18)),
+                      color: AppTheme.error.withValues(alpha: 0.18),
+                    ),
                   ),
                   child: Row(
                     children: const [
-                      Icon(Icons.warning_amber_rounded,
-                          color: AppTheme.error, size: 16),
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        color: AppTheme.error,
+                        size: 16,
+                      ),
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -1885,7 +2039,9 @@ class _SettleDialogState extends State<_SettleDialog> {
 
                 // Confirm
                 GradientButton(
-                  label: _confirming ? 'Duke u barazuar…' : 'Konfirmo Barazimin',
+                  label: _confirming
+                      ? 'Duke u barazuar…'
+                      : 'Konfirmo Barazimin',
                   icon: _confirming
                       ? Icons.hourglass_empty_rounded
                       : Icons.check_rounded,
@@ -1916,7 +2072,8 @@ class _InfoRow extends StatelessWidget {
         children: [
           Text(label, style: AppTheme.bodyMedium),
           const Spacer(),
-          Text(value,
+          Text(
+            value,
             style: TextStyle(
               color: color,
               fontWeight: FontWeight.w800,
@@ -1944,7 +2101,8 @@ class _EmptyState extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 64, height: 64,
+              width: 64,
+              height: 64,
               decoration: BoxDecoration(
                 color: AppTheme.textMuted.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(18),
@@ -1978,20 +2136,20 @@ Future<bool?> _confirmDialog({
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, false),
-          child: Text('Anulo',
-              style: TextStyle(color: AppTheme.textSecondary)),
+          child: Text('Anulo', style: TextStyle(color: AppTheme.textSecondary)),
         ),
         ElevatedButton(
           style: ElevatedButton.styleFrom(
             backgroundColor: confirmColor,
             foregroundColor: Colors.white,
             elevation: 0,
-            shape: RoundedRectangleBorder(
-                borderRadius: AppTheme.radiusSmall),
+            shape: RoundedRectangleBorder(borderRadius: AppTheme.radiusSmall),
           ),
           onPressed: () => Navigator.pop(context, true),
-          child: Text(confirmLabel,
-              style: const TextStyle(fontWeight: FontWeight.w700)),
+          child: Text(
+            confirmLabel,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
         ),
       ],
     ),
