@@ -232,7 +232,13 @@ class _DeveloperModeScreenState extends State<DeveloperModeScreen> {
                 return isNarrow
                     ? Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [sidebar, content],
+                        children: [
+                          Flexible(
+                            child: SingleChildScrollView(child: sidebar),
+                          ),
+                          const SizedBox(height: 16),
+                          content,
+                        ],
                       )
                     : Row(
                         crossAxisAlignment: CrossAxisAlignment.start,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../data/dao_products.dart';
+import '../theme/app_theme.dart';
 import '../util/money.dart';
 
 class AdminProductsScreen extends StatefulWidget {
@@ -98,63 +99,73 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              const Text(
-                'Produktet',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(width: 12),
-              SizedBox(
-                width: 240,
-                child: DropdownButtonFormField<int>(
-                  value: selectedCategoryId,
-                  items: [
-                    for (final c in categories)
-                      DropdownMenuItem(value: c.id, child: Text(c.name)),
-                  ],
-                  onChanged: (v) async {
-                    selectedCategoryId = v;
-                    await _load();
-                  },
-                  decoration: const InputDecoration(labelText: 'Kategoria'),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Menaxho Produkte'),
+        backgroundColor: AppTheme.primary,
+      ),
+      backgroundColor: AppTheme.bg,
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                const Text(
+                  'Produktet',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
                 ),
-              ),
-              const Spacer(),
-              ElevatedButton.icon(
-                onPressed: _addProductDialog,
-                icon: const Icon(Icons.add),
-                label: const Text('Shto Produkt'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: loading
-                ? const Center(child: CircularProgressIndicator())
-                : Card(
-                    child: ListView.separated(
-                      itemCount: products.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (_, i) {
-                        final p = products[i];
-                        return ListTile(
-                          title: Text(p.name),
-                          subtitle: Text(p.categoryName ?? ''),
-                          trailing: Text(
-                            moneyFromCents(p.priceCents),
-                            style: const TextStyle(fontWeight: FontWeight.w900),
-                          ),
-                        );
-                      },
-                    ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 240,
+                  child: DropdownButtonFormField<int>(
+                    value: selectedCategoryId,
+                    items: [
+                      for (final c in categories)
+                        DropdownMenuItem(value: c.id, child: Text(c.name)),
+                    ],
+                    onChanged: (v) async {
+                      selectedCategoryId = v;
+                      await _load();
+                    },
+                    decoration: const InputDecoration(labelText: 'Kategoria'),
                   ),
-          ),
-        ],
+                ),
+                const Spacer(),
+                ElevatedButton.icon(
+                  onPressed: _addProductDialog,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Shto Produkt'),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+            Expanded(
+              child: loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : Card(
+                      child: ListView.separated(
+                        itemCount: products.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (_, i) {
+                          final p = products[i];
+                          return ListTile(
+                            title: Text(p.name),
+                            subtitle: Text(p.categoryName ?? ''),
+                            trailing: Text(
+                              moneyFromCents(p.priceCents),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }

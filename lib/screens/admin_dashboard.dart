@@ -11,6 +11,7 @@ import '../data/dao_tables.dart';
 import '../util/money.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_widgets.dart';
+import 'admin_products_screen.dart';
 import 'admin_settings_screen.dart';
 import 'daily_sales_screen.dart';
 import 'manage_users_screen.dart';
@@ -221,6 +222,18 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     );
                     _load();
                   },
+                ),
+                const SizedBox(height: 8),
+                _SidebarActionBtn(
+                  icon: Icons.local_bar_rounded,
+                  label: 'Menaxho Produkte',
+                  color: Colors.blue,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const AdminProductsScreen(),
+                    ),
+                  ),
                 ),
               ],
             ),
