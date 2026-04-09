@@ -9,6 +9,7 @@ import '../data/dao_tables.dart';
 import '../util/money.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_widgets.dart';
+import 'admin_settings_screen.dart';
 import 'daily_sales_screen.dart';
 import 'manage_users_screen.dart';
 
@@ -54,6 +55,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     (Icons.dashboard_rounded, 'Pasqyra'),
     (Icons.groups_rounded, 'Punonjësit'),
     (Icons.table_restaurant_rounded, 'Tavolinat'),
+    (Icons.settings_rounded, 'Settings'),
   ];
 
   @override
@@ -318,6 +320,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         ),
         _StaffTab(waiters: _waiters, onRefresh: _load),
         _TablesTab(onRefresh: _load),
+        const AdminSettingsScreen(),
       ],
     );
   }

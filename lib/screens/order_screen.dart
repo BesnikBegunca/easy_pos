@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../data/dao_orders.dart';
 import '../data/dao_products.dart';
+import '../data/dao_settings.dart';
 import '../data/dao_tables.dart';
 import '../util/money.dart';
 import '../theme/app_theme.dart';
@@ -34,6 +35,7 @@ class _OrderScreenState extends State<OrderScreen> {
   List<CategoryRow> _categories = [];
   int? _selectedCategoryId;
   List<ProductRow> _products = [];
+  int _productColumns = SettingsDao.defaultProductColumns;
 
   final _searchC = TextEditingController();
   final Set<int> _busy = {};
@@ -63,6 +65,10 @@ class _OrderScreenState extends State<OrderScreen> {
       );
       _categories = await ProductsDao.I.listCategories();
       _selectedCategoryId = _categories.isEmpty ? null : _categories.first.id;
+      _productColumns = await SettingsDao.I.getInt(
+        SettingsDao.productGridColumns,
+        SettingsDao.defaultProductColumns,
+      );
       await Future.wait([_reloadProducts(), _refreshCart()]);
     } catch (e) {
       _error = e.toString();
@@ -875,11 +881,11 @@ class _OrderScreenState extends State<OrderScreen> {
                   ),
                 )
               : GridView.builder(
-                  padding: const EdgeInsets.all(12),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 4,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
+                  padding: const EdgeInsets.all(8),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: _productColumns,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
                     childAspectRatio: 1.0,
                   ),
                   itemCount: _products.length,
@@ -905,7 +911,7 @@ class _OrderScreenState extends State<OrderScreen> {
         onTap: () => _addProduct(p),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: inCart

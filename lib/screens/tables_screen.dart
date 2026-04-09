@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../data/dao_settings.dart';
 import '../data/dao_tables.dart';
 import '../auth/session.dart';
 import '../util/money.dart';
@@ -24,6 +25,7 @@ class _TablesScreenState extends State<TablesScreen>
   bool _isLoading = false;
   bool _didSeedTables = false;
   String _lastFingerprint = '';
+  int _tableColumns = SettingsDao.defaultTableColumns;
 
   Stream<List<FullTableRow>> get _stream => _tablesController.stream;
 
@@ -31,7 +33,16 @@ class _TablesScreenState extends State<TablesScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _loadSettings();
     _startRealtimeRefresh();
+  }
+
+  Future<void> _loadSettings() async {
+    final cols = await SettingsDao.I.getInt(
+      SettingsDao.tableGridColumns,
+      SettingsDao.defaultTableColumns,
+    );
+    if (mounted) setState(() => _tableColumns = cols);
   }
 
   @override
@@ -263,12 +274,11 @@ class _TablesScreenState extends State<TablesScreen>
                 onRefresh: _refresh,
                 child: GridView.builder(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                  gridDelegate:
-                      const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 5,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: _tableColumns,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
                     childAspectRatio: 1.05,
                   ),
                   itemCount: tables.length + 1,
@@ -510,7 +520,7 @@ class _PremiumTableCard extends StatelessWidget {
         splashColor: statusColor.withValues(alpha: 0.10),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 220),
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,

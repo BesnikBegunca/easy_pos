@@ -2,7 +2,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-const int kDbVersion = 13;
+const int kDbVersion = 14;
 
 class AppDb {
   AppDb._();
@@ -133,6 +133,17 @@ CREATE TABLE IF NOT EXISTS printed_sales(
               await db.execute(
                 'ALTER TABLE dining_tables ADD COLUMN owner_id INTEGER',
               );
+            } catch (_) {}
+          }
+
+          if (oldV < 14) {
+            try {
+              await db.execute('''
+CREATE TABLE IF NOT EXISTS app_settings(
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+''');
             } catch (_) {}
           }
 
@@ -300,6 +311,14 @@ CREATE TABLE IF NOT EXISTS settlements(
   settled_at INTEGER NOT NULL,
   FOREIGN KEY(waiter_id) REFERENCES users(id),
   FOREIGN KEY(settled_by) REFERENCES users(id)
+);
+''');
+
+    // APP SETTINGS
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS app_settings(
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
 );
 ''');
 
