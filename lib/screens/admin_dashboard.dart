@@ -12,11 +12,14 @@ import '../data/dao_tables.dart';
 import '../util/money.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_widgets.dart';
+import '../data/dao_expenses.dart';
 import 'admin_products_screen.dart';
 import 'admin_settings_screen.dart';
 import 'daily_sales_screen.dart';
+import 'expenses_screen.dart';
 import 'manage_users_screen.dart';
 import 'waiter_settlement_screen.dart';
+import 'worker_calendar_screen.dart';
 import 'z_report_screen.dart';
 
 class AdminDashboard extends StatefulWidget {
@@ -33,6 +36,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
   List<AppUserRow> _waiters = [];
   int _todayTotal = 0;
   int _todayOrders = 0;
+  int _monthSalesTotal = 0;
+  int _monthExpensesTotal = 0;
 
   @override
   void initState() {
@@ -43,22 +48,37 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
+      final now = DateTime.now();
       await LicenseService.I.init();
       final all = await UsersDao.I.listUsers();
       final todayTotal = await OrdersDao.I.getTodayTotal();
       final todayOrders = await OrdersDao.I.getTodayOrderCount();
-      if (!mounted) {
-        return;
-      }
+      final monthStart = DateTime(now.year, now.month).millisecondsSinceEpoch;
+      final monthEnd = DateTime(
+        now.year,
+        now.month + 1,
+        0,
+        23,
+        59,
+        59,
+        999,
+      ).millisecondsSinceEpoch;
+      final monthSales = await OrdersDao.I.getTotalSalesInRange(
+        monthStart,
+        monthEnd,
+      );
+      final monthExpenses =
+          await ExpensesDao.I.getMonthTotal(now.year, now.month);
+      if (!mounted) return;
       setState(() {
         _waiters = all.where((u) => u.role == UserRole.waiter).toList();
         _todayTotal = todayTotal;
         _todayOrders = todayOrders;
+        _monthSalesTotal = monthSales;
+        _monthExpensesTotal = monthExpenses;
       });
     } finally {
-      if (mounted) {
-        setState(() => _loading = false);
-      }
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -286,6 +306,36 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       ),
                     ),
                   ),
+                const SizedBox(height: 8),
+                _SidebarActionBtn(
+                  icon: Icons.calendar_month_rounded,
+                  label: 'Kalendari Punonjës',
+                  color: const Color(0xFFA78BFA),
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const WorkerCalendarScreen(),
+                      ),
+                    );
+                    _load();
+                  },
+                ),
+                const SizedBox(height: 8),
+                _SidebarActionBtn(
+                  icon: Icons.receipt_long_rounded,
+                  label: 'Shpenzimet',
+                  color: AppTheme.error,
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const ExpensesScreen(),
+                      ),
+                    );
+                    _load();
+                  },
+                ),
               ],
             ),
           ),
@@ -415,11 +465,20 @@ class _AdminDashboardState extends State<AdminDashboard> {
           waiters: _waiters,
           todayTotal: _todayTotal,
           todayOrders: _todayOrders,
+          monthSalesTotal: _monthSalesTotal,
+          monthExpensesTotal: _monthExpensesTotal,
           onRefresh: _load,
           onNavigateSales: () => Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const DailySalesScreen()),
           ),
+          onOpenExpenses: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ExpensesScreen()),
+            );
+            _load();
+          },
         ),
         _StaffTab(waiters: _waiters, onRefresh: _load),
         _TablesTab(onRefresh: _load),
@@ -586,15 +645,21 @@ class _OverviewTab extends StatelessWidget {
   final List<AppUserRow> waiters;
   final int todayTotal;
   final int todayOrders;
+  final int monthSalesTotal;
+  final int monthExpensesTotal;
   final VoidCallback onRefresh;
   final VoidCallback onNavigateSales;
+  final VoidCallback onOpenExpenses;
 
   const _OverviewTab({
     required this.waiters,
     required this.todayTotal,
     required this.todayOrders,
+    required this.monthSalesTotal,
+    required this.monthExpensesTotal,
     required this.onRefresh,
     required this.onNavigateSales,
+    required this.onOpenExpenses,
   });
 
   int get _activeCount => waiters.where((w) => w.isOnShift).length;
@@ -658,6 +723,14 @@ class _OverviewTab extends StatelessWidget {
             todayTotal: todayTotal,
             todayOrders: todayOrders,
             activeCount: _activeCount,
+          ),
+          const SizedBox(height: 12),
+
+          // ── Profit card ────────────────────────────────────────────────────
+          _ProfitCard(
+            monthSales: monthSalesTotal,
+            monthExpenses: monthExpensesTotal,
+            onOpenExpenses: onOpenExpenses,
           ),
           const SizedBox(height: 16),
 
@@ -905,6 +978,164 @@ class _HeroMini extends StatelessWidget {
               fontWeight: FontWeight.w800,
               fontSize: 13,
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Profit Card ───────────────────────────────────────────────────────────────
+class _ProfitCard extends StatelessWidget {
+  final int monthSales;
+  final int monthExpenses;
+  final VoidCallback onOpenExpenses;
+
+  const _ProfitCard({
+    required this.monthSales,
+    required this.monthExpenses,
+    required this.onOpenExpenses,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final profit = monthSales - monthExpenses;
+    final isPositive = profit >= 0;
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppTheme.card,
+        borderRadius: AppTheme.borderRadius,
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.analytics_rounded,
+                  color: AppTheme.primary, size: 16),
+              const SizedBox(width: 7),
+              const Text(
+                'Profiti i Muajit',
+                style: TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: onOpenExpenses,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.error.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                        color: AppTheme.error.withValues(alpha: 0.22)),
+                  ),
+                  child: const Text(
+                    'Shpenzimet →',
+                    style: TextStyle(
+                        color: AppTheme.error,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _ProfitMini(
+                  label: 'Shitjet',
+                  value: moneyFromCents(monthSales),
+                  color: AppTheme.success,
+                  icon: Icons.trending_up_rounded,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _ProfitMini(
+                  label: 'Shpenzimet',
+                  value: moneyFromCents(monthExpenses),
+                  color: AppTheme.error,
+                  icon: Icons.trending_down_rounded,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _ProfitMini(
+                  label: 'Fitimi',
+                  value: moneyFromCents(profit),
+                  color: isPositive ? AppTheme.primary : AppTheme.error,
+                  icon: isPositive
+                      ? Icons.account_balance_rounded
+                      : Icons.warning_amber_rounded,
+                  highlight: true,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfitMini extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  final IconData icon;
+  final bool highlight;
+
+  const _ProfitMini({
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.icon,
+    this.highlight = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: highlight ? 0.12 : 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+            color: color.withValues(alpha: highlight ? 0.30 : 0.14)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: color, size: 13),
+              const SizedBox(width: 4),
+              Text(label,
+                  style: TextStyle(
+                      color: color,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600)),
+            ],
+          ),
+          const SizedBox(height: 5),
+          Text(
+            value,
+            style: TextStyle(
+              color: highlight ? color : AppTheme.textPrimary,
+              fontWeight: FontWeight.w800,
+              fontSize: highlight ? 13 : 12,
+            ),
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

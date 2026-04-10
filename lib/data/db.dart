@@ -3,7 +3,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-const int kDbVersion = 16; // product barcodes
+const int kDbVersion = 17; // worker attendance + expenses
 
 class AppDb {
   AppDb._();
@@ -175,6 +175,43 @@ CREATE TABLE IF NOT EXISTS audit_logs(
               await db.execute(
                 'CREATE UNIQUE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode) WHERE barcode IS NOT NULL AND barcode <> ""',
               );
+            } catch (_) {}
+          }
+
+          if (oldV < 17) {
+            try {
+              await db.execute(
+                'ALTER TABLE users ADD COLUMN daily_salary_cents INTEGER NOT NULL DEFAULT 0',
+              );
+            } catch (_) {}
+
+            try {
+              await db.execute('''
+CREATE TABLE IF NOT EXISTS worker_attendance(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  work_date TEXT NOT NULL,
+  worked INTEGER NOT NULL DEFAULT 0,
+  advance_cents INTEGER NOT NULL DEFAULT 0,
+  note TEXT,
+  created_at INTEGER NOT NULL,
+  UNIQUE(user_id, work_date),
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+''');
+            } catch (_) {}
+
+            try {
+              await db.execute('''
+CREATE TABLE IF NOT EXISTS expenses(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  category TEXT NOT NULL,
+  amount_cents INTEGER NOT NULL,
+  expense_date TEXT NOT NULL,
+  note TEXT,
+  created_at INTEGER NOT NULL
+);
+''');
             } catch (_) {}
           }
 
@@ -368,6 +405,31 @@ CREATE TABLE IF NOT EXISTS audit_logs(
   FOREIGN KEY(user_id) REFERENCES users(id)
 );
 ''');
+
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS worker_attendance(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  work_date TEXT NOT NULL,
+  worked INTEGER NOT NULL DEFAULT 0,
+  advance_cents INTEGER NOT NULL DEFAULT 0,
+  note TEXT,
+  created_at INTEGER NOT NULL,
+  UNIQUE(user_id, work_date),
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+''');
+
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS expenses(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  category TEXT NOT NULL,
+  amount_cents INTEGER NOT NULL,
+  expense_date TEXT NOT NULL,
+  note TEXT,
+  created_at INTEGER NOT NULL
+);
+''');
   }
 
   Future<void> _seedDefaults(Database db) async {
@@ -452,6 +514,14 @@ CREATE TABLE IF NOT EXISTS audit_logs(
   Future<void> _ensureTableColumns(Database db) async {
     final rows = await db.rawQuery('PRAGMA table_info(users)');
     final hasRole = rows.any((r) => r['name'] == 'role');
+    final hasDailySalary = rows.any((r) => r['name'] == 'daily_salary_cents');
+    if (!hasDailySalary) {
+      try {
+        await db.execute(
+          'ALTER TABLE users ADD COLUMN daily_salary_cents INTEGER NOT NULL DEFAULT 0',
+        );
+      } catch (_) {}
+    }
 
     if (!hasRole) {
       await db.execute(

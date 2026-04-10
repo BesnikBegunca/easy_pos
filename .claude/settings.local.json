@@ -4,7 +4,8 @@
       "Bash(flutter analyze:*)",
       "Bash(grep -v \"//.*Shadow\")",
       "Bash(cmd /c \"cd c:\\\\fluttersdk\\\\easy_pos && flutter analyze lib/screens/z_report_screen.dart lib/data/dao_z_report.dart 2>&1\")",
-      "Bash(cmd /c \"cd c:\\\\fluttersdk\\\\easy_pos && flutter analyze 2>&1 | findstr /i error\")"
+      "Bash(cmd /c \"cd c:\\\\fluttersdk\\\\easy_pos && flutter analyze 2>&1 | findstr /i error\")",
+      "Bash(ls -1 /c/fluttersdk/easy_pos/lib/data/dao_*.dart)"
     ]
   }
 }

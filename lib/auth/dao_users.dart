@@ -12,6 +12,7 @@ class AppUserRow {
   final bool isOnShift;
   final int? shiftStartedAt;
   final int createdAt;
+  final int dailySalaryCents;
 
   AppUserRow({
     required this.id,
@@ -22,6 +23,7 @@ class AppUserRow {
     required this.isOnShift,
     required this.shiftStartedAt,
     required this.createdAt,
+    this.dailySalaryCents = 0,
   });
 }
 
@@ -46,6 +48,7 @@ class UsersDao {
         isOnShift: ((u['on_shift'] as int?) ?? 0) == 1,
         shiftStartedAt: (u['shift_started_at'] as int?),
         createdAt: u['created_at'] as int,
+        dailySalaryCents: (u['daily_salary_cents'] as int?) ?? 0,
       );
     }).toList();
   }
@@ -153,5 +156,15 @@ class UsersDao {
 
   Future<List<AppUserRow>> listAllUsersFullAccess() async {
     return listUsers();
+  }
+
+  Future<void> setDailySalary(int id, int dailySalaryCents) async {
+    final db = await AppDb.I.db;
+    await db.update(
+      'users',
+      {'daily_salary_cents': dailySalaryCents},
+      where: 'id=?',
+      whereArgs: [id],
+    );
   }
 }
