@@ -9,11 +9,19 @@ class CategoryRow {
 class ProductRow {
   final int id;
   final String name;
+  final String? barcode;
   final int priceCents;
   final int? categoryId;
   final String? categoryName;
 
-  ProductRow({required this.id, required this.name, required this.priceCents, required this.categoryId, required this.categoryName});
+  ProductRow({
+    required this.id,
+    required this.name,
+    required this.barcode,
+    required this.priceCents,
+    required this.categoryId,
+    required this.categoryName,
+  });
 }
 
 class ProductsDao {
@@ -49,7 +57,7 @@ class ProductsDao {
     }
 
     final rows = await db.rawQuery('''
-SELECT p.id, p.name, p.price_cents, p.category_id, c.name AS category_name
+SELECT p.id, p.name, p.barcode, p.price_cents, p.category_id, c.name AS category_name
 FROM products p
 LEFT JOIN categories c ON c.id = p.category_id
 WHERE ${where.join(' AND ')}
@@ -59,6 +67,7 @@ ORDER BY c.sort_index ASC, c.name ASC, p.name ASC
     return rows.map((e) => ProductRow(
       id: e['id'] as int,
       name: e['name'] as String,
+      barcode: e['barcode'] as String?,
       priceCents: e['price_cents'] as int,
       categoryId: e['category_id'] as int?,
       categoryName: e['category_name'] as String?,
@@ -66,10 +75,66 @@ ORDER BY c.sort_index ASC, c.name ASC, p.name ASC
   }
 
 
-  Future<int> addProduct({required String name, required int priceCents, int? categoryId}) async {
+  Future<ProductRow?> findActiveProductByScanCode(String rawCode) async {
+    final db = await AppDb.I.db;
+    final code = rawCode.trim();
+    if (code.isEmpty) return null;
+
+    final exactBarcode = await db.rawQuery(
+      '''
+SELECT p.id, p.name, p.barcode, p.price_cents, p.category_id, c.name AS category_name
+FROM products p
+LEFT JOIN categories c ON c.id = p.category_id
+WHERE p.is_active = 1 AND p.barcode = ?
+LIMIT 1
+''',
+      [code],
+    );
+    if (exactBarcode.isNotEmpty) {
+      final row = exactBarcode.first;
+      return ProductRow(
+        id: row['id'] as int,
+        name: row['name'] as String,
+        barcode: row['barcode'] as String?,
+        priceCents: row['price_cents'] as int,
+        categoryId: row['category_id'] as int?,
+        categoryName: row['category_name'] as String?,
+      );
+    }
+
+    final fallback = await db.rawQuery(
+      '''
+SELECT p.id, p.name, p.barcode, p.price_cents, p.category_id, c.name AS category_name
+FROM products p
+LEFT JOIN categories c ON c.id = p.category_id
+WHERE p.is_active = 1
+  AND (LOWER(p.name) = ? OR CAST(p.id AS TEXT) = ?)
+LIMIT 1
+''',
+      [code.toLowerCase(), code],
+    );
+    if (fallback.isEmpty) return null;
+    final row = fallback.first;
+    return ProductRow(
+      id: row['id'] as int,
+      name: row['name'] as String,
+      barcode: row['barcode'] as String?,
+      priceCents: row['price_cents'] as int,
+      categoryId: row['category_id'] as int?,
+      categoryName: row['category_name'] as String?,
+    );
+  }
+
+  Future<int> addProduct({
+    required String name,
+    required int priceCents,
+    String? barcode,
+    int? categoryId,
+  }) async {
     final db = await AppDb.I.db;
     return db.insert('products', {
       'name': name.trim(),
+      'barcode': (barcode ?? '').trim().isEmpty ? null : barcode!.trim(),
       'price_cents': priceCents,
       'category_id': categoryId,
       'is_active': 1,

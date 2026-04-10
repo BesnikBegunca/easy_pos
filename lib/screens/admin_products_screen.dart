@@ -37,6 +37,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
 
   Future<void> _addProductDialog() async {
     final nameC = TextEditingController();
+    final barcodeC = TextEditingController();
     final priceC = TextEditingController();
     int? catId = selectedCategoryId;
 
@@ -52,6 +53,11 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
               TextField(
                 controller: nameC,
                 decoration: const InputDecoration(labelText: 'Emri'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: barcodeC,
+                decoration: const InputDecoration(labelText: 'Barcode'),
               ),
               const SizedBox(height: 10),
               TextField(
@@ -95,6 +101,7 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
     await ProductsDao.I.addProduct(
       name: nameC.text,
       priceCents: cents,
+      barcode: barcodeC.text,
       categoryId: catId,
     );
     await _load();
@@ -177,7 +184,12 @@ class _AdminProductsScreenState extends State<AdminProductsScreen> {
                           final p = products[i];
                           return ListTile(
                             title: Text(p.name),
-                            subtitle: Text(p.categoryName ?? ''),
+                            subtitle: Text(
+                              [
+                                if ((p.categoryName ?? '').isNotEmpty) p.categoryName!,
+                                if ((p.barcode ?? '').isNotEmpty) 'Barcode: ${p.barcode}',
+                              ].join(' • '),
+                            ),
                             trailing: Text(
                               moneyFromCents(p.priceCents),
                               style: const TextStyle(

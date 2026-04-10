@@ -98,6 +98,10 @@ class _WaiterShellState extends State<_WaiterShell> {
 
   @override
   Widget build(BuildContext context) {
+    if (_mode == 'market') {
+      return const MarketPosScreen();
+    }
+
     final u = Session.I.current!;
     final name = u.fullName?.trim().isNotEmpty == true
         ? u.fullName!.split(' ').first
@@ -109,8 +113,6 @@ class _WaiterShellState extends State<_WaiterShell> {
       body = const Center(
         child: CircularProgressIndicator(color: AppTheme.primary),
       );
-    } else if (_mode == 'market') {
-      body = const MarketPosScreen();
     } else {
       body = const TablesScreen();
     }

@@ -9,6 +9,7 @@ import 'l10n/app_l10n.dart';
 import 'screens/license_lock_screen.dart';
 import 'screens/license_manager_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/market_pos_screen.dart';
 import 'screens/shell.dart';
 import 'screens/startup_screen.dart';
 import 'theme/app_theme.dart';
@@ -80,6 +81,7 @@ class App extends StatelessWidget {
         routes: {
           '/login': (_) => const LoginScreen(),
           '/shell': (_) => const ShellScreen(),
+          '/market-pos': (_) => const MarketPosScreen(),
           '/manage-users': (_) => const ManageUsersScreen(),
           '/license-lock': (_) => const LicenseLockScreen(),
           '/license-manager': (_) => const LicenseManagerScreen(),

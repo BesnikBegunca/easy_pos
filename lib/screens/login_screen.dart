@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../auth/auth_service.dart';
 import '../auth/license_service.dart';
+import '../auth/user_home_route.dart';
 import '../auth/session.dart';
 import '../auth/roles.dart';
 
@@ -76,7 +77,7 @@ class _LoginScreenState extends State<LoginScreen>
         return;
       }
       Session.I.setUser(u);
-      Navigator.of(context).pushReplacementNamed('/shell');
+      Navigator.of(context).pushReplacementNamed(userHomeRoute());
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -284,7 +285,7 @@ class _LoginScreenState extends State<LoginScreen>
 
       if (!mounted) return;
       Navigator.of(dialogContext).pop(); // Close dialog
-      Navigator.of(currentContext).pushReplacementNamed('/shell');
+      Navigator.of(currentContext).pushReplacementNamed(userHomeRoute());
     } finally {
       setNotLoading();
     }

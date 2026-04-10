@@ -3,7 +3,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-const int kDbVersion = 15; // audit_logs
+const int kDbVersion = 16; // product barcodes
 
 class AppDb {
   AppDb._();
@@ -164,6 +164,20 @@ CREATE TABLE IF NOT EXISTS audit_logs(
             } catch (_) {}
           }
 
+          if (oldV < 16) {
+            try {
+              await db.execute(
+                'ALTER TABLE products ADD COLUMN barcode TEXT',
+              );
+            } catch (_) {}
+
+            try {
+              await db.execute(
+                'CREATE UNIQUE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode) WHERE barcode IS NOT NULL AND barcode <> ""',
+              );
+            } catch (_) {}
+          }
+
           await _createAll(db);
           await _seedDefaults(db);
         },
@@ -225,6 +239,7 @@ CREATE TABLE IF NOT EXISTS categories(
 CREATE TABLE IF NOT EXISTS products(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
+  barcode TEXT,
   category_id INTEGER,
   price_cents INTEGER NOT NULL,
   is_active INTEGER NOT NULL DEFAULT 1,
@@ -443,6 +458,16 @@ CREATE TABLE IF NOT EXISTS audit_logs(
         'ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT "waiter"',
       );
     }
+
+    final productRows = await db.rawQuery('PRAGMA table_info(products)');
+    final hasBarcode = productRows.any((r) => r['name'] == 'barcode');
+    if (!hasBarcode) {
+      await db.execute('ALTER TABLE products ADD COLUMN barcode TEXT');
+    }
+
+    await db.execute(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode) WHERE barcode IS NOT NULL AND barcode <> ""',
+    );
   }
 
   Future<int> getDatabaseSize() async {

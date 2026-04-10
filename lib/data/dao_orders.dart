@@ -415,7 +415,7 @@ class OrdersDao {
 
   /// Creates an order, inserts items, applies discount, and marks it paid —
   /// all in one DB transaction. Used exclusively by Market POS mode.
-  Future<void> createMarketTransaction({
+  Future<int> createMarketTransaction({
     required int tableId,
     required int waiterId,
     required String paymentMethod, // 'cash' | 'card'
@@ -423,10 +423,10 @@ class OrdersDao {
     required int discountCents, // discount to subtract
     required List<Map<String, int>> items, // productId, qty, unitPriceCents
   }) async {
-    if (items.isEmpty) return;
+    if (items.isEmpty) return 0;
     final db = await AppDb.I.db;
 
-    await db.transaction((txn) async {
+    return db.transaction((txn) async {
       final nowMs = DateTime.now().millisecondsSinceEpoch;
       final finalTotal = (grossCents - discountCents).clamp(0, grossCents);
 
@@ -473,6 +473,8 @@ class OrdersDao {
         'printed_at': nowMs,
         'settled_id': null,
       });
+
+      return orderId;
     });
   }
 
